@@ -83,15 +83,12 @@ export const config: WebdriverIO.Config = {
     //NB: Passes platform caps dynamically - iOS/Android
     capabilities: getTestBotCapabilities(),
 
-    //NB: Node 26 fix — @wdio/browserstack-service's beforeSession sets 'Dispatcher1Wrapper'
-    //as the undici global dispatcher. The webdriver package then uses it for POST /session,
-    //which throws UND_ERR_INVALID_ARG on Node 26. This hook runs AFTER the service's
-    //beforeSession (which has already set the hub URL and capabilities), then resets the
-    //dispatcher to a plain Agent so the session creation fetch goes through the standard path.
-    beforeSession: USE_BROWSERSTACK ? async function () {
+    //NB: Node 26 fix applies to BOTH BrowserStack and Real Device
+    //The undici dispatcher fix is required for Node 26 regardless of target environment
+    beforeSession: async function () {
         const { Agent, setGlobalDispatcher } = await import('undici');
         setGlobalDispatcher(new Agent());
-    } : undefined,
+    },
 
     //NB: There is a known issue that if the Browserstack session connects to the same device again on the next run, the app caches and shows a login page as opposed to the enrolment screen, which breaks the tests. This hook reinstalls the .apk/.ipa after each run from the relevant env variable to ensure each session is a truly fresh installation.
     //In the pipeline this will be the value of the pipeline variable "BROWSERSTACK_APP" from the build.
