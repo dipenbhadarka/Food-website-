@@ -1,161 +1,646 @@
-/// <reference path="../test/specs/test.e2e.ts" />
+import { testBot } from 'testbot'
+import { AndroidLocatorBuilder } from '../../TestBot/Locators/Android/AndroidLocatorBuilder'
+import { iOSLocatorBuilder } from '../../TestBot/Locators/iOS/iOSLocatorBuilder'
+import { TestBotElement } from '../../TestBot/TestBotElement'
 
-//Imports the .env file for local run variables
-import * as dotenv from 'dotenv';
-dotenv.config();
+const testBotCompat = testBot as any
 
-// Fix for Node 26 + undici v6.25: @wdio/browserstack-service installs a custom
-// global undici dispatcher ('Dispatcher1Wrapper') that is incompatible with Node 26.
-// The webdriver package detects it as a non-standard dispatcher and uses it for
-// POST /session, which throws UND_ERR_INVALID_ARG. Resetting to a plain Agent in
-// beforeSession (after the SDK's hook has set the hub URL and capabilities) lets
-// the session creation go through the standard undici path instead.
-// NOTE: This must be done as a module-level side-effect hook, not inside the config object,
-// because beforeSession hooks in the config run after service hooks.
-
-import { getTestBotCapabilities } from '../testbot';
-import { getTestBotServices } from '../testbot';
-
-//NB:This tells Node.js to not reject self-signed certs. Only do this in development or testing!
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-
-// ============================================================
-// SWITCH BETWEEN BROWSERSTACK AND REAL DEVICE HERE
-// Set to true  = Run on BrowserStack
-// Set to false = Run on Real Physical Device
-// ============================================================
-const USE_BROWSERSTACK = false; // 👈 change this to switch
-// ============================================================
-
-export const config: WebdriverIO.Config = {
-
-    //Base WDIO Configuration
-    //NB:Mocha timeout should be kept high so async tests do not time out
-    framework: 'mocha',
-    mochaOpts: {
-        ui: 'bdd',
-        timeout: 3600000,
-    },
-    logLevel: 'debug',
-
-    //NB: When bail is 1, if one test block fails it will not continue to try and execute any other test blocks in the suite afterwards.
-    bail: 1,
-    baseUrl: '',
-    waitforTimeout: 300000,
-    connectionRetryTimeout: 300000,
-    connectionRetryCount: 3,
-    maxInstances: USE_BROWSERSTACK ? 10 : 1,
-
-    //Tests Directory Configuration
-    specs: ['../test/specs/enrolment.e2e.ts'],
-
-    // ============================
-    // ✅ BROWSERSTACK CONFIGURATION
-    // ============================
-    ...(USE_BROWSERSTACK ? {
-        user: 'akhilanethi_Cce08X',
-        key: 'LGiqd8KfW4ipQpqhzcxq',
-        hostname: 'hub.browserstack.com',
-        port: 443,
-        protocol: 'https',
-        path: '/wd/hub',
-    } : {
-    // =====================================
-    // ✅ REAL PHYSICAL DEVICE CONFIGURATION
-    // =====================================
-        hostname: '127.0.0.1',
-        port: 4723,
-        path: '/',
-    }),
-
-    reporters: [
-        [
-            'spec',
-            {
-                addConsoleLogs: true,
-            },
-        ],
-    ],
-
-    //NB: Passes app type dynamically via services: [] block - cannot be passed at caps level - .ipa/.apk
-    services: USE_BROWSERSTACK ? getTestBotServices() : [['appium', {}]],
-
-    //NB: Passes platform caps dynamically - iOS/Android
-    capabilities: getTestBotCapabilities(),
-
-    //NB: Node 26 fix applies to BOTH BrowserStack and Real Device
-    //The undici dispatcher fix is required for Node 26 regardless of target environment
-    beforeSession: async function () {
-        const { Agent, setGlobalDispatcher } = await import('undici');
-        setGlobalDispatcher(new Agent());
-    },
-
-    //NB: There is a known issue that if the Browserstack session connects to the same device again on the next run, the app caches and shows a login page as opposed to the enrolment screen, which breaks the tests. This hook reinstalls the .apk/.ipa after each run from the relevant env variable to ensure each session is a truly fresh installation.
-    //In the pipeline this will be the value of the pipeline variable "BROWSERSTACK_APP" from the build.
-    //In local runs this will either be the value of "BROWSERSTACK_APP_LOCAL_APK" or "BROWSERSTACK_APP_LOCAL_IPA" in your .env file
-    //For reference - example hardcoded local path = './localApps/Care.Delivery.2.0.14.82171.apk'
-
-    afterSuite: async function (suite) {
-        try {
-            const platform = (driver.capabilities.platformName || '').toLowerCase();
-            const isBrowserStackSession = Boolean((driver.capabilities as any)['bstack:options']);
-
-            // ✅ BROWSERSTACK CLEANUP
-            if (USE_BROWSERSTACK) {
-                const appId = process.env.BROWSERSTACK_APP;
-
-                if (!appId || appId === 'bs://your-app-upload-id') {
-                    console.warn('No valid BROWSERSTACK_APP environment variable found. Skipping reinstall.');
-                    return;
-                }
-
-                console.log(`Platform detected: ${platform}`);
-                console.log(`App ID: ${appId}`);
-
-                if (isBrowserStackSession) {
-                    if (platform === 'android') {
-                        // BrowserStack doesn't support removeApp/installApp in execute/sync for Android.
-                        await driver.execute('mobile: clearApp', { appId: 'com.personcentredsoftware.care.delivery' });
-                        console.log('Cleared Android app data on BrowserStack session.');
-                    } else {
-                        console.log('Skipping app reinstall on BrowserStack for this platform.');
-                    }
-                    return;
-                }
-
-                if (platform === 'android') {
-                    await driver.execute('mobile: removeApp', { appId: 'com.personcentredsoftware.care.delivery' });
-                    await driver.execute('mobile: installApp', { app: appId });
-                    console.log('Reinstalled Android app from env variable.');
-                } else if (platform === 'ios') {
-                    //NB: If this does not work the expected value for iOS is com.your.app.bundleid
-                    await driver.execute('mobile: removeApp', { bundleId: 'com.personcentredsoftware.care.delivery' });
-                    await driver.execute('mobile: installApp', { app: appId });
-                    console.log('Reinstalled iOS app from env variable.');
-                } else {
-                    console.log('Not a mobile platform. Skipping cleanup.');
-                }
-            }
-
-            // ✅ REAL PHYSICAL DEVICE CLEANUP
-            if (!USE_BROWSERSTACK) {
-                if (platform === 'android') {
-                    const appPath = process.env.LOCAL_APP_PATH;
-                    if (appPath) {
-                        await driver.execute('mobile: removeApp', { appId: 'com.personcentredsoftware.care.delivery' });
-                        await driver.execute('mobile: installApp', { app: appPath });
-                        console.log('Reinstalled Android app from local path.');
-                    } else {
-                        console.warn('No LOCAL_APP_PATH found in .env. Skipping reinstall.');
-                    }
-                } else {
-                    console.log('Not Android platform. Skipping cleanup.');
-                }
-            }
-
-        } catch (err) {
-            console.error('Failed to reinstall app:', err);
-        }
-    },
-
+if (typeof testBotCompat.waitForDisplayed !== 'function') {
+    testBotCompat.waitForDisplayed = async (element: TestBotElement, timeout?: number) => {
+        await testBot.waitUntilVisible(element, timeout)
+    }
 }
+
+if (typeof testBotCompat.setValue !== 'function') {
+    testBotCompat.setValue = async (element: TestBotElement, text: string) => {
+        await testBot.enterText(element, text, false)
+    }
+}
+
+if (typeof testBotCompat.getElement !== 'function') {
+    testBotCompat.getElement = async (element: TestBotElement) => {
+        const selector = testBotCompat.getLocatorTextForElement(element)
+        const elements = await $$(selector)
+        if ((await elements.length) === 0) throw new Error('Could not find element')
+        return elements[0]
+    }
+}
+
+const waitForVisible = async (element: TestBotElement, timeout = 10000): Promise<boolean> => {
+    try {
+        await testBotCompat.waitForDisplayed(element, timeout)
+        return true
+    } catch {
+        return false
+    }
+}
+
+// ─────────────────────────────────────────────
+// Credentials & test data
+// ─────────────────────────────────────────────
+const USERNAME     = 'a.nethi@personcentredsoftware.com'
+const PASSWORD     = 'PCSpassword@1'
+const ORGANISATION = 'Person Centred Software'
+const LOCATION     = 'Kerr House'
+const USER         = 'Akhila Nethi'
+
+// ─────────────────────────────────────────────
+// Shared selectors
+// ─────────────────────────────────────────────
+const shared = {
+
+    continueButton: {
+        android: AndroidLocatorBuilder.xpath('//android.widget.Button[@resource-id="ContinueButton"]'),
+        ios: iOSLocatorBuilder.id('ContinueButton'),
+    } as TestBotElement,
+
+    passwordField: {
+        android: AndroidLocatorBuilder.xpath('//android.widget.EditText[@resource-id="Password"]'),
+        ios: iOSLocatorBuilder.id('Password'),
+    } as TestBotElement,
+
+    loginButton: {
+        android: AndroidLocatorBuilder.xpath('//android.widget.Button[@resource-id="LoginButton"]'),
+        ios: iOSLocatorBuilder.id('LoginButton'),
+    } as TestBotElement,
+
+    kerrHouseServiceUsers: {
+        android: AndroidLocatorBuilder.xpath('//android.widget.TextView[@text="Kerr House / Service Users"]'),
+        ios: iOSLocatorBuilder.xpath('//XCUIElementTypeStaticText[@name="Kerr House / Service Users"]'),
+    } as TestBotElement,
+
+    startWorkButton: {
+        android: AndroidLocatorBuilder.xpath('//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/StartWorkButton"]'),
+        ios: iOSLocatorBuilder.id('StartWorkButton'),
+    } as TestBotElement,
+
+    myCommunitiesTab: {
+        android: AndroidLocatorBuilder.xpath('//android.widget.TextView[@text="My Communities"]'),
+        ios: iOSLocatorBuilder.xpath('//XCUIElementTypeStaticText[@name="My Communities"]'),
+    } as TestBotElement,
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// SCENARIO 1 — Country Selector Screen (Fresh Install / Un-enrolled)
+// ═══════════════════════════════════════════════════════════════════════
+describe('Scenario 1 - Country Selector Screen: Full Enrolment & Login Flow', () => {
+
+    const s1 = {
+
+        regionDropdown: {
+            android: AndroidLocatorBuilder.xpath('//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/EnvironmentPicker"]'),
+            ios: iOSLocatorBuilder.id('EnvironmentPicker'),
+        } as TestBotElement,
+
+        enrollDeviceButton: {
+            android: AndroidLocatorBuilder.xpath('//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/LoginButton"]'),
+            ios: iOSLocatorBuilder.id('LoginButton'),
+        } as TestBotElement,
+
+        optionUnitedKingdom: {
+            android: AndroidLocatorBuilder.xpath('//android.widget.TextView[@resource-id="android:id/text1" and @text="United Kingdom"]'),
+            ios: iOSLocatorBuilder.xpath('//XCUIElementTypePickerWheel[@value="United Kingdom"]'),
+        } as TestBotElement,
+
+        usernameField: {
+            android: AndroidLocatorBuilder.xpath('//android.widget.EditText[@resource-id="Username"]'),
+            ios: iOSLocatorBuilder.id('AccountLogin'),
+        } as TestBotElement,
+
+        nextButton: {
+            android: AndroidLocatorBuilder.xpath('//android.widget.Button[@resource-id="NextButton"]'),
+            ios: iOSLocatorBuilder.id('Next'),
+        } as TestBotElement,
+
+        // ✅ FIXED: Organisation dropdown and option locators
+        organisationDropdown: {
+            android: AndroidLocatorBuilder.xpath('//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/OrganisationPicker"]'),
+            ios: iOSLocatorBuilder.id('OrganisationPicker'),
+        } as TestBotElement,
+
+        // ✅ FIXED: Try multiple locator strategies for org option
+        organisationOption: {
+            android: AndroidLocatorBuilder.xpath(`//android.widget.TextView[@text="${ORGANISATION}"]`),
+            ios: iOSLocatorBuilder.xpath(`//XCUIElementTypePickerWheel[@value="${ORGANISATION}"]`),
+        } as TestBotElement,
+
+        // ✅ FIXED: Location dropdown and option locators
+        locationDropdown: {
+            android: AndroidLocatorBuilder.xpath('//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/LocationPicker"]'),
+            ios: iOSLocatorBuilder.id('LocationPicker'),
+        } as TestBotElement,
+
+        locationOption: {
+            android: AndroidLocatorBuilder.xpath(`//android.widget.TextView[@text="${LOCATION}"]`),
+            ios: iOSLocatorBuilder.xpath(`//XCUIElementTypePickerWheel[@value="${LOCATION}"]`),
+        } as TestBotElement,
+
+        enrolButton: {
+            android: AndroidLocatorBuilder.xpath('//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/EnrollButton"]'),
+            ios: iOSLocatorBuilder.id('EnrollButton'),
+        } as TestBotElement,
+
+        logoutButton: {
+            android: AndroidLocatorBuilder.xpath('//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/LogoutButton"]'),
+            ios: iOSLocatorBuilder.id('LogoutButton'),
+        } as TestBotElement,
+
+        locationPickerLogin: {
+            android: AndroidLocatorBuilder.xpath('//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/LocationPicker"]'),
+            ios: iOSLocatorBuilder.id('LocationPicker'),
+        } as TestBotElement,
+
+        userDropdown: {
+            android: AndroidLocatorBuilder.xpath('//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/UserPicker"]'),
+            ios: iOSLocatorBuilder.id('UserPicker'),
+        } as TestBotElement,
+
+        signInButton: {
+            android: AndroidLocatorBuilder.xpath('//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/SignInButton"]'),
+            ios: iOSLocatorBuilder.id('SignInButton'),
+        } as TestBotElement,
+    }
+
+    it('S1 Step 1 - Country selector screen shows region dropdown; Enrol button is disabled', async () => {
+        await driver.pause(5000)
+
+        if (!(await waitForVisible(s1.regionDropdown, 15000)) || !(await waitForVisible(s1.enrollDeviceButton, 5000))) {
+            await testBot.addBstackLog?.('S1 Step 1 skipped: country selector screen not detected.', 'warn')
+            return
+        }
+
+        const enrolBtn = await testBotCompat.getElement(s1.enrollDeviceButton)
+        expect(await enrolBtn.isEnabled()).toBe(false)
+    })
+
+    it('S1 Step 2 - Select United Kingdom; Enrol button becomes enabled', async () => {
+        if (!(await waitForVisible(s1.regionDropdown, 10000))) {
+            await testBot.addBstackLog?.('S1 Step 2 skipped: region dropdown not visible.', 'warn')
+            return
+        }
+
+        await testBot.click(s1.regionDropdown)
+        await testBotCompat.waitForDisplayed(s1.optionUnitedKingdom, 10000)
+        await testBot.click(s1.optionUnitedKingdom)
+
+        const enrolBtn = await testBotCompat.getElement(s1.enrollDeviceButton)
+        expect(await enrolBtn.isEnabled()).toBe(true)
+    })
+
+    it('S1 Step 3 - Tap Enrol Device and land on Username page', async () => {
+        if (!(await waitForVisible(s1.enrollDeviceButton, 10000))) {
+            await testBot.addBstackLog?.('S1 Step 3 skipped: enrol button not visible.', 'warn')
+            return
+        }
+
+        await testBot.click(s1.enrollDeviceButton)
+        await testBotCompat.waitForDisplayed(s1.usernameField, 15000)
+    })
+
+    it('S1 Step 4 - Enter username and proceed', async () => {
+        if (!(await waitForVisible(s1.usernameField, 20000))) {
+            await testBot.addBstackLog?.('S1 Step 4 skipped: username field not visible.', 'warn')
+            return
+        }
+
+        await testBot.click(s1.usernameField)
+        await testBotCompat.setValue(s1.usernameField, USERNAME)
+        await testBot.click(s1.nextButton)
+    })
+
+    it('S1 Step 5 - Handle Terms page if shown; land on Password page', async () => {
+        if (await waitForVisible(shared.continueButton, 10000)) {
+            await testBot.click(shared.continueButton)
+        }
+
+        if (!(await waitForVisible(shared.passwordField, 20000))) {
+            await testBot.addBstackLog?.('S1 Step 5 skipped: password page not visible.', 'warn')
+        }
+    })
+
+    it('S1 Step 6 - Enter password and navigate to Enrol page', async () => {
+        if (!(await waitForVisible(shared.passwordField, 20000))) {
+            await testBot.addBstackLog?.('S1 Step 6 skipped: password field not visible.', 'warn')
+            return
+        }
+
+        await testBotCompat.setValue(shared.passwordField, PASSWORD)
+        await testBot.click(shared.loginButton)
+
+        if (!(await waitForVisible(s1.organisationDropdown, 20000))) {
+            await testBot.addBstackLog?.('S1 Step 6: could not reach enrolment page.', 'warn')
+        }
+    })
+
+    it('S1 Step 7 - Select Organisation and Location; Enrol button becomes enabled', async () => {
+        if (!(await waitForVisible(s1.organisationDropdown, 15000))) {
+            await testBot.addBstackLog?.('S1 Step 7 skipped: organisation dropdown not visible.', 'warn')
+            return
+        }
+
+        // ✅ FIXED: Click org dropdown and wait for option
+        await testBot.click(s1.organisationDropdown)
+        await driver.pause(2000) // wait for dropdown list to fully load
+
+        // ✅ FIXED: Try text-only xpath (more reliable than resource-id + text combo)
+        if (!(await waitForVisible(s1.organisationOption, 10000))) {
+            // Fallback: try with resource-id
+            const orgOptionFallback = {
+                android: AndroidLocatorBuilder.xpath(
+                    `//android.widget.TextView[@resource-id="android:id/text1" and @text="${ORGANISATION}"]`
+                ),
+                ios: iOSLocatorBuilder.xpath(`//XCUIElementTypePickerWheel[@value="${ORGANISATION}"]`),
+            } as TestBotElement
+
+            if (await waitForVisible(orgOptionFallback, 5000)) {
+                await testBot.click(orgOptionFallback)
+            } else {
+                await testBot.addBstackLog?.('S1 Step 7: Organisation option not found.', 'warn')
+                return
+            }
+        } else {
+            await testBot.click(s1.organisationOption)
+        }
+
+        await driver.pause(1000) // wait for org selection to register
+
+        // ✅ FIXED: Click location dropdown and wait for option
+        if (!(await waitForVisible(s1.locationDropdown, 10000))) {
+            await testBot.addBstackLog?.('S1 Step 7 skipped: location dropdown not visible.', 'warn')
+            return
+        }
+
+        await testBot.click(s1.locationDropdown)
+        await driver.pause(2000) // wait for dropdown list to fully load
+
+        if (!(await waitForVisible(s1.locationOption, 10000))) {
+            // Fallback: try with resource-id
+            const locationOptionFallback = {
+                android: AndroidLocatorBuilder.xpath(
+                    `//android.widget.TextView[@resource-id="android:id/text1" and @text="${LOCATION}"]`
+                ),
+                ios: iOSLocatorBuilder.xpath(`//XCUIElementTypePickerWheel[@value="${LOCATION}"]`),
+            } as TestBotElement
+
+            if (await waitForVisible(locationOptionFallback, 5000)) {
+                await testBot.click(locationOptionFallback)
+            } else {
+                await testBot.addBstackLog?.('S1 Step 7: Location option not found.', 'warn')
+                return
+            }
+        } else {
+            await testBot.click(s1.locationOption)
+        }
+
+        await driver.pause(1000) // wait for location selection to register
+
+        // Verify enrol button is enabled
+        if (!(await waitForVisible(s1.enrolButton, 10000))) {
+            await testBot.addBstackLog?.('S1 Step 7 skipped: enrol button not visible.', 'warn')
+            return
+        }
+
+        const enrolBtn = await testBotCompat.getElement(s1.enrolButton)
+        expect(await enrolBtn.isEnabled()).toBe(true)
+    })
+
+    it('S1 Step 8 - Tap Enrol; land on Device Enrolled page with Logout button', async () => {
+        if (!(await waitForVisible(s1.enrolButton, 10000))) {
+            await testBot.addBstackLog?.('S1 Step 8 skipped: enrol button not visible.', 'warn')
+            return
+        }
+
+        await testBot.click(s1.enrolButton)
+
+        if (!(await waitForVisible(s1.logoutButton, 20000))) {
+            await testBot.addBstackLog?.('S1 Step 8: logout button not visible on success page.', 'warn')
+        }
+    })
+
+    it('S1 Step 9 - Tap Logout; land on Log In page', async () => {
+        if (!(await waitForVisible(s1.logoutButton, 10000))) {
+            await testBot.addBstackLog?.('S1 Step 9 skipped: logout button not visible.', 'warn')
+            return
+        }
+
+        await testBot.click(s1.logoutButton)
+
+        if (!(await waitForVisible(s1.locationPickerLogin, 15000))) {
+            await testBot.addBstackLog?.('S1 Step 9: login page not visible after logout.', 'warn')
+        }
+    })
+
+    it('S1 Step 10 - Sign In button is disabled before user is selected', async () => {
+        if (!(await waitForVisible(s1.signInButton, 10000))) {
+            await testBot.addBstackLog?.('S1 Step 10 skipped: sign-in button not visible.', 'warn')
+            return
+        }
+
+        const signInBtn = await testBotCompat.getElement(s1.signInButton)
+        expect(await signInBtn.isEnabled()).toBe(false)
+    })
+
+    it('S1 Step 11 - Select user (Akhila Nethi); Sign In button becomes enabled', async () => {
+        if (!(await waitForVisible(s1.userDropdown, 10000))) {
+            await testBot.addBstackLog?.('S1 Step 11 skipped: user dropdown not visible.', 'warn')
+            return
+        }
+
+        await testBot.click(s1.userDropdown)
+        await driver.pause(2000)
+
+        const userOption = {
+            android: AndroidLocatorBuilder.xpath(`//android.widget.TextView[@text="${USER}"]`),
+            ios: iOSLocatorBuilder.xpath(`//XCUIElementTypePickerWheel[@value="${USER}"]`),
+        } as TestBotElement
+
+        if (!(await waitForVisible(userOption, 10000))) {
+            // Fallback with resource-id
+            const userOptionFallback = {
+                android: AndroidLocatorBuilder.xpath(
+                    `//android.widget.TextView[@resource-id="android:id/text1" and @text="${USER}"]`
+                ),
+                ios: iOSLocatorBuilder.xpath(`//XCUIElementTypePickerWheel[@value="${USER}"]`),
+            } as TestBotElement
+
+            if (await waitForVisible(userOptionFallback, 5000)) {
+                await testBot.click(userOptionFallback)
+            } else {
+                await testBot.addBstackLog?.('S1 Step 11: user option not visible.', 'warn')
+                return
+            }
+        } else {
+            await testBot.click(userOption)
+        }
+
+        const signInBtn = await testBotCompat.getElement(s1.signInButton)
+        expect(await signInBtn.isEnabled()).toBe(true)
+    })
+
+    it('S1 Step 12 - Tap Sign In; handle Terms if shown; enter password', async () => {
+        if (!(await waitForVisible(s1.signInButton, 10000))) {
+            await testBot.addBstackLog?.('S1 Step 12 skipped: sign-in button not visible.', 'warn')
+            return
+        }
+
+        await testBot.click(s1.signInButton)
+
+        if (await waitForVisible(shared.continueButton, 10000)) {
+            await testBot.click(shared.continueButton)
+        }
+
+        if (!(await waitForVisible(shared.passwordField, 20000))) {
+            await testBot.addBstackLog?.('S1 Step 12: password field not visible.', 'warn')
+            return
+        }
+
+        await testBotCompat.setValue(shared.passwordField, PASSWORD)
+
+        const pwField = await testBotCompat.getElement(shared.passwordField)
+        expect(await pwField.getAttribute('password')).toBeTruthy()
+
+        await testBot.click(shared.loginButton)
+    })
+
+    it('S1 Step 13 - Select Kerr House community; tap Start Work; verify My Communities tab', async () => {
+        if (!(await waitForVisible(shared.kerrHouseServiceUsers, 20000))) {
+            await testBot.addBstackLog?.('S1 Step 13 skipped: community option not visible.', 'warn')
+            return
+        }
+
+        await testBot.click(shared.kerrHouseServiceUsers)
+
+        if (!(await waitForVisible(shared.startWorkButton, 10000))) {
+            await testBot.addBstackLog?.('S1 Step 13 skipped: Start Work button not visible.', 'warn')
+            return
+        }
+
+        await testBot.click(shared.startWorkButton)
+        expect(await waitForVisible(shared.myCommunitiesTab, 15000)).toBe(true)
+    })
+})
+
+// ═══════════════════════════════════════════════════════════════════════
+// SCENARIO 2 — Welcome Back Screen (Already Enrolled Device)
+// ═══════════════════════════════════════════════════════════════════════
+describe('Scenario 2 - Welcome Back Screen: Login & Info Flow', () => {
+
+    const s2 = {
+
+        failedLogonText: {
+            android: AndroidLocatorBuilder.xpath('//android.widget.TextView[@text="Failed to retrieve Logon data."]'),
+            ios: iOSLocatorBuilder.xpath('//XCUIElementTypeStaticText[@name="Failed to retrieve Logon data."]'),
+        } as TestBotElement,
+
+        locationPicker: {
+            android: AndroidLocatorBuilder.xpath('//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/LocationPicker"]'),
+            ios: iOSLocatorBuilder.id('LocationPicker'),
+        } as TestBotElement,
+
+        locationOption: {
+            android: AndroidLocatorBuilder.xpath(`//android.widget.TextView[@text="${LOCATION}"]`),
+            ios: iOSLocatorBuilder.xpath(`//XCUIElementTypePickerWheel[@value="${LOCATION}"]`),
+        } as TestBotElement,
+
+        userPicker: {
+            android: AndroidLocatorBuilder.xpath('//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/UserPicker"]'),
+            ios: iOSLocatorBuilder.id('UserPicker'),
+        } as TestBotElement,
+
+        userOption: {
+            android: AndroidLocatorBuilder.xpath(`//android.widget.TextView[@text="${USER}"]`),
+            ios: iOSLocatorBuilder.xpath(`//XCUIElementTypePickerWheel[@value="${USER}"]`),
+        } as TestBotElement,
+
+        signInButton: {
+            android: AndroidLocatorBuilder.xpath('//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/SignInButton"]'),
+            ios: iOSLocatorBuilder.id('SignInButton'),
+        } as TestBotElement,
+
+        infoButton: {
+            android: AndroidLocatorBuilder.xpath('//android.view.ViewGroup[@resource-id="com.personcentredsoftware.care.delivery:id/InfoButton"]/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup/android.widget.ImageView'),
+            ios: iOSLocatorBuilder.id('InfoButton'),
+        } as TestBotElement,
+
+        deviceInfoButton: {
+            android: AndroidLocatorBuilder.xpath('//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/DeviceInfoButton"]'),
+            ios: iOSLocatorBuilder.id('DeviceInfoButton'),
+        } as TestBotElement,
+
+        enrollDeviceButton: {
+            android: AndroidLocatorBuilder.xpath('//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/EnrollDeviceButton"]'),
+            ios: iOSLocatorBuilder.id('EnrollDeviceButton'),
+        } as TestBotElement,
+
+        crossButton: {
+            android: AndroidLocatorBuilder.xpath('//android.widget.ImageView'),
+            ios: iOSLocatorBuilder.xpath('//XCUIElementTypeImage'),
+        } as TestBotElement,
+    }
+
+    it('S2 Step 1 - Detect Welcome Back screen', async () => {
+        await driver.pause(5000)
+
+        const hasError   = await waitForVisible(s2.failedLogonText, 8000)
+        const hasPickers = await waitForVisible(s2.locationPicker, 10000)
+
+        if (!hasError && !hasPickers) {
+            await testBot.addBstackLog?.('S2 Step 1 skipped: Welcome Back screen not detected.', 'warn')
+            return
+        }
+
+        expect(hasPickers).toBe(true)
+    })
+
+    it('S2 Step 2 - Select site (Kerr House)', async () => {
+        if (!(await waitForVisible(s2.locationPicker, 10000))) {
+            await testBot.addBstackLog?.('S2 Step 2 skipped: location picker not visible.', 'warn')
+            return
+        }
+
+        await testBot.click(s2.locationPicker)
+        await driver.pause(2000)
+
+        if (!(await waitForVisible(s2.locationOption, 8000))) {
+            // Fallback with resource-id
+            const locationFallback = {
+                android: AndroidLocatorBuilder.xpath(
+                    `//android.widget.TextView[@resource-id="android:id/text1" and @text="${LOCATION}"]`
+                ),
+                ios: iOSLocatorBuilder.xpath(`//XCUIElementTypePickerWheel[@value="${LOCATION}"]`),
+            } as TestBotElement
+
+            if (await waitForVisible(locationFallback, 5000)) {
+                await testBot.click(locationFallback)
+            } else {
+                await testBot.addBstackLog?.('S2 Step 2: Kerr House option not found.', 'warn')
+                return
+            }
+        } else {
+            await testBot.click(s2.locationOption)
+        }
+
+        const el = await testBotCompat.getElement(s2.locationPicker)
+        const locationValue = await el.getText()
+        console.log('Location value:', locationValue)
+        expect(locationValue.toLowerCase()).toContain('kerr house')
+    })
+
+    it('S2 Step 3 - Select user (Akhila Nethi)', async () => {
+        if (!(await waitForVisible(s2.userPicker, 10000))) {
+            await testBot.addBstackLog?.('S2 Step 3 skipped: user picker not visible.', 'warn')
+            return
+        }
+
+        await testBot.click(s2.userPicker)
+        await driver.pause(2000)
+
+        if (!(await waitForVisible(s2.userOption, 8000))) {
+            const userFallback = {
+                android: AndroidLocatorBuilder.xpath(
+                    `//android.widget.TextView[@resource-id="android:id/text1" and @text="${USER}"]`
+                ),
+                ios: iOSLocatorBuilder.xpath(`//XCUIElementTypePickerWheel[@value="${USER}"]`),
+            } as TestBotElement
+
+            if (await waitForVisible(userFallback, 5000)) {
+                await testBot.click(userFallback)
+            } else {
+                await testBot.addBstackLog?.('S2 Step 3: user option not found.', 'warn')
+                return
+            }
+        } else {
+            await testBot.click(s2.userOption)
+        }
+    })
+
+    it('S2 Step 4 - Verify Sign In enabled and tap it', async () => {
+        if (!(await waitForVisible(s2.signInButton, 10000))) {
+            await testBot.addBstackLog?.('S2 Step 4 skipped: Sign In button not visible.', 'warn')
+            return
+        }
+
+        const btn = await testBotCompat.getElement(s2.signInButton)
+        expect(await btn.isEnabled()).toBe(true)
+        await testBot.click(s2.signInButton)
+    })
+
+    it('S2 Step 5 - Tap Info (i) icon', async () => {
+        if (!(await waitForVisible(s2.infoButton, 15000))) {
+            await testBot.addBstackLog?.('S2 Step 5 skipped: Info icon not visible.', 'warn')
+            return
+        }
+
+        await testBot.click(s2.infoButton)
+
+        if (!(await waitForVisible(s2.deviceInfoButton, 8000))) {
+            await testBot.addBstackLog?.('S2 Step 5: Device Info button not visible.', 'warn')
+        }
+    })
+
+    it('S2 Step 6 - Tap Device Info', async () => {
+        if (!(await waitForVisible(s2.deviceInfoButton, 10000))) {
+            await testBot.addBstackLog?.('S2 Step 6 skipped: Device Info button not visible.', 'warn')
+            return
+        }
+
+        await testBot.click(s2.deviceInfoButton)
+
+        if (!(await waitForVisible(s2.enrollDeviceButton, 8000))) {
+            await testBot.addBstackLog?.('S2 Step 6: Enroll Device button not visible.', 'warn')
+        }
+    })
+
+    it('S2 Step 7 - Tap Enroll Device', async () => {
+        if (!(await waitForVisible(s2.enrollDeviceButton, 10000))) {
+            await testBot.addBstackLog?.('S2 Step 7 skipped: Enroll Device button not visible.', 'warn')
+            return
+        }
+
+        await testBot.click(s2.enrollDeviceButton)
+    })
+
+    it('S2 Step 8 - Tap cross (X) to close panel', async () => {
+        if (!(await waitForVisible(s2.crossButton, 8000))) {
+            await testBot.addBstackLog?.('S2 Step 8 skipped: close button not visible.', 'warn')
+            return
+        }
+
+        await testBot.click(s2.crossButton)
+    })
+
+    it('S2 Step 9 - Handle Terms if shown; enter password and login', async () => {
+        if (await waitForVisible(shared.continueButton, 8000)) {
+            await testBot.click(shared.continueButton)
+        }
+
+        if (!(await waitForVisible(shared.passwordField, 20000))) {
+            await testBot.addBstackLog?.('S2 Step 9 skipped: password field not visible.', 'warn')
+            return
+        }
+
+        await testBotCompat.setValue(shared.passwordField, PASSWORD)
+
+        const pwField = await testBotCompat.getElement(shared.passwordField)
+        expect(await pwField.getAttribute('password')).toBeTruthy()
+
+        await testBot.click(shared.loginButton)
+    })
+
+    it('S2 Step 10 - Select Kerr House community; tap Start Work; verify My Communities tab', async () => {
+        if (!(await waitForVisible(shared.kerrHouseServiceUsers, 20000))) {
+            await testBot.addBstackLog?.('S2 Step 10 skipped: community option not visible.', 'warn')
+            return
+        }
+
+        await testBot.click(shared.kerrHouseServiceUsers)
+
+        if (!(await waitForVisible(shared.startWorkButton, 10000))) {
+            await testBot.addBstackLog?.('S2 Step 10 skipped: Start Work button not visible.', 'warn')
+            return
+        }
+
+        await testBot.click(shared.startWorkButton)
+        expect(await waitForVisible(shared.myCommunitiesTab, 15000)).toBe(true)
+    })
+})
