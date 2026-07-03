@@ -36,67 +36,52 @@ const waitForVisible = async (element: TestBotElement, timeout = 10000): Promise
 }
 
 // ─────────────────────────────────────────────
-// Helper: Single swipe down in dropdown list
+// Helper: click a native AlertDialog list option
+// (Organisation / Location / User pickers all use
+// the same standard Android select_dialog_listview,
+// whose items carry a LEADING SPACE in their text —
+// e.g. " Person Centred Software" — so matching must
+// use contains(), never exact equality.)
 // ─────────────────────────────────────────────
-const swipeDownInList = async (): Promise<void> => {
-    const { width, height } = await driver.getWindowSize()
-    await driver.action('pointer', {
-        parameters: { pointerType: 'touch' }
-    })
-    .move({ x: Math.round(width / 2), y: Math.round(height * 0.8) })
-    .down()
-    .move({ x: Math.round(width / 2), y: Math.round(height * 0.2), duration: 800 })
-    .up()
-    .perform()
-    await driver.pause(1000)
-}
+const SELECT_DIALOG_LIST_ID = 'com.personcentredsoftware.care.delivery:id/select_dialog_listview'
 
-// ─────────────────────────────────────────────
-// Helper: Click dropdown option with single
-// swipe if not immediately visible
-// ─────────────────────────────────────────────
-const clickDropdownOption = async (text: string, iosValue: string): Promise<boolean> => {
+const clickDropdownOption = async (text: string, iosValue?: string): Promise<boolean> => {
 
-    // Primary locator - text only
-    const primaryOption = {
-        android: AndroidLocatorBuilder.xpath(`//android.widget.TextView[@text="${text}"]`),
-        ios: iOSLocatorBuilder.xpath(`//XCUIElementTypePickerWheel[@value="${iosValue}"]`),
+    if (driver.isAndroid) {
+        // Might already be visible without scrolling
+        try {
+            const direct = await $(`android=new UiSelector().textContains("${text}")`)
+            if (await direct.isExisting()) {
+                await direct.click()
+                console.log(`✅ Direct click: ${text}`)
+                return true
+            }
+        } catch {}
+
+        // scrollIntoView scrolls the exact list until found — no guessed distance, no overshoot
+        try {
+            const el = await $(
+                `android=new UiScrollable(new UiSelector().resourceId("${SELECT_DIALOG_LIST_ID}")).scrollIntoView(new UiSelector().textContains("${text}"))`
+            )
+            await el.click()
+            console.log(`✅ Found via scroll: ${text}`)
+            return true
+        } catch (err) {
+            console.log(`❌ Not found even after scroll: ${text}`, err)
+            return false
+        }
+    }
+
+    // iOS — unchanged (no dump evidence for iOS yet)
+    const iosOption = {
+        android: AndroidLocatorBuilder.xpath(`//android.widget.TextView[contains(@text,"${text}")]`),
+        ios: iOSLocatorBuilder.xpath(`//XCUIElementTypePickerWheel[@value="${iosValue ?? text}"]`),
     } as TestBotElement
 
-    // Fallback locator - resource-id + text
-    const fallbackOption = {
-        android: AndroidLocatorBuilder.xpath(
-            `//android.widget.TextView[@resource-id="android:id/text1" and @text="${text}"]`
-        ),
-        ios: iOSLocatorBuilder.xpath(`//XCUIElementTypePickerWheel[@value="${iosValue}"]`),
-    } as TestBotElement
-
-    // ✅ Step 1: Try direct click first (already visible)
-    if (await waitForVisible(primaryOption, 3000)) {
-        await testBot.click(primaryOption)
-        console.log(`✅ Direct click: ${text}`)
+    if (await waitForVisible(iosOption, 8000)) {
+        await testBot.click(iosOption)
         return true
     }
-
-    // ✅ Step 2: One single swipe down (P is near bottom alphabetically)
-    console.log(`Item not visible, swiping down once to find: ${text}`)
-    await swipeDownInList()
-
-    // ✅ Step 3: Try primary locator after swipe
-    if (await waitForVisible(primaryOption, 5000)) {
-        await testBot.click(primaryOption)
-        console.log(`✅ Clicked after single swipe: ${text}`)
-        return true
-    }
-
-    // ✅ Step 4: Try fallback locator after swipe
-    if (await waitForVisible(fallbackOption, 3000)) {
-        await testBot.click(fallbackOption)
-        console.log(`✅ Clicked via fallback after swipe: ${text}`)
-        return true
-    }
-
-    console.log(`❌ Could not find option: ${text}`)
     return false
 }
 
@@ -163,7 +148,7 @@ describe('Scenario 1 - Country Selector Screen: Full Enrolment & Login Flow', ()
         } as TestBotElement,
 
         optionUnitedKingdom: {
-            android: AndroidLocatorBuilder.xpath('//android.widget.TextView[@resource-id="android:id/text1" and @text="United Kingdom"]'),
+            android: AndroidLocatorBuilder.xpath('//android.widget.TextView[@resource-id="android:id/text1" and contains(@text,"United Kingdom")]'),
             ios: iOSLocatorBuilder.xpath('//XCUIElementTypePickerWheel[@value="United Kingdom"]'),
         } as TestBotElement,
 
@@ -234,12 +219,12 @@ describe('Scenario 1 - Country Selector Screen: Full Enrolment & Login Flow', ()
         await testBot.click(s1.regionDropdown)
         await driver.pause(2000)
 
-        if (!(await waitForVisible(s1.optionUnitedKingdom, 10000))) {
-            await testBot.addBstackLog?.('S1 Step 2 skipped: United Kingdom option not visible.', 'warn')
+        const ukSelected = await clickDropdownOption('United Kingdom', 'United Kingdom')
+        if (!ukSelected) {
+            await testBot.addBstackLog?.('S1 Step 2 skipped: United Kingdom option not found.', 'warn')
             return
         }
 
-        await testBot.click(s1.optionUnitedKingdom)
         await driver.pause(1000)
 
         const enrolBtn = await testBotCompat.getElement(s1.enrollDeviceButton)
@@ -303,11 +288,10 @@ describe('Scenario 1 - Country Selector Screen: Full Enrolment & Login Flow', ()
             return
         }
 
-        // ✅ Click organisation dropdown
+        // ✅ Organisation
         await testBot.click(s1.organisationDropdown)
         await driver.pause(2000)
 
-        // ✅ Single swipe down then click Person Centred Software
         const orgSelected = await clickDropdownOption(ORGANISATION, ORGANISATION)
         if (!orgSelected) {
             await testBot.addBstackLog?.('S1 Step 7: Organisation not found.', 'warn')
@@ -317,7 +301,7 @@ describe('Scenario 1 - Country Selector Screen: Full Enrolment & Login Flow', ()
         await driver.pause(1000)
         console.log(`✅ Organisation "${ORGANISATION}" selected`)
 
-        // ✅ Click location dropdown
+        // ✅ Location
         if (!(await waitForVisible(s1.locationDropdown, 10000))) {
             await testBot.addBstackLog?.('S1 Step 7 skipped: location dropdown not visible.', 'warn')
             return
@@ -326,7 +310,6 @@ describe('Scenario 1 - Country Selector Screen: Full Enrolment & Login Flow', ()
         await testBot.click(s1.locationDropdown)
         await driver.pause(2000)
 
-        // ✅ Single swipe down then click Kerr House
         const locationSelected = await clickDropdownOption(LOCATION, LOCATION)
         if (!locationSelected) {
             await testBot.addBstackLog?.('S1 Step 7: Location not found.', 'warn')
@@ -391,7 +374,6 @@ describe('Scenario 1 - Country Selector Screen: Full Enrolment & Login Flow', ()
         await testBot.click(s1.userDropdown)
         await driver.pause(2000)
 
-        // ✅ Single swipe down then click Akhila Nethi
         const userSelected = await clickDropdownOption(USER, USER)
         if (!userSelected) {
             await testBot.addBstackLog?.('S1 Step 11: user not found.', 'warn')
@@ -524,7 +506,6 @@ describe('Scenario 2 - Welcome Back Screen: Login & Info Flow', () => {
         await testBot.click(s2.locationPicker)
         await driver.pause(2000)
 
-        // ✅ Single swipe down then click Kerr House
         const locationSelected = await clickDropdownOption(LOCATION, LOCATION)
         if (!locationSelected) {
             await testBot.addBstackLog?.('S2 Step 2: Kerr House not found.', 'warn')
@@ -548,7 +529,6 @@ describe('Scenario 2 - Welcome Back Screen: Login & Info Flow', () => {
         await testBot.click(s2.userPicker)
         await driver.pause(2000)
 
-        // ✅ Single swipe down then click Akhila Nethi
         const userSelected = await clickDropdownOption(USER, USER)
         if (!userSelected) {
             await testBot.addBstackLog?.('S2 Step 3: user not found.', 'warn')
