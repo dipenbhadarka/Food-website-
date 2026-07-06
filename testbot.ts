@@ -54,22 +54,15 @@ export function getTestBotCapabilities(): RequestedStandaloneCapabilities[] {
     if (context.platform === TestBotPlatform.Android) {
 
         // ── LOCAL PHYSICAL DEVICE ─────────────
-        // Uses package name + activity to launch
-        // the app already installed on your device
-        // No bstack:options — purely local Appium
         if (isLocal) {
-            console.log('▶ Capabilities: LOCAL Android device')
+            console.log('▶ Capabilities: LOCAL Android device UDID=R5GL10H8QFT')
             return [{
                 platformName: 'Android',
-                'appium:deviceName': process.env.BROWSERSTACK_DEVICE_NAME || 'Android Device',
+                'appium:deviceName': 'R5GL10H8QFT',
                 'appium:platformVersion': process.env.BROWSERSTACK_OS_VERSION || '14.0',
                 'appium:automationName': 'UiAutomator2',
                 'appium:autoGrantPermissions': true,
-                'appium:udid': process.env.BROWSERSTACK_DEVICE_UDID,
-
-                // ── App launch by package name ──
-                // No file path needed — launches
-                // the app already on your device
+                'appium:udid': 'R5GL10H8QFT',
                 'appium:appPackage': 'com.personcentredsoftware.care.delivery',
                 'appium:appActivity': 'com.personcentredsoftware.care.delivery.MainActivity',
                 'appium:noReset': true,
@@ -111,9 +104,7 @@ export function getTestBotCapabilities(): RequestedStandaloneCapabilities[] {
                 'appium:platformVersion': process.env.BROWSERSTACK_OS_VERSION || '18',
                 'appium:automationName': 'XCUITest',
                 'appium:autoGrantPermissions': true,
-                'appium:udid': process.env.BROWSERSTACK_DEVICE_UDID,
-
-                // ── App launch by bundle ID ──
+                'appium:udid': 'R5GL10H8QFT',
                 'appium:bundleId': 'com.personcentredsoftware.care.delivery',
                 'appium:noReset': true,
                 'appium:fullReset': false,
