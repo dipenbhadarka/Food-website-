@@ -38,6 +38,7 @@ const isLocal = process.env.RUN_MODE === 'local';
 
 // ─────────────────────────────────────────────
 // BrowserStack Services
+// Only used when RUN_MODE=browserstack
 // ─────────────────────────────────────────────
 export function getTestBotServices(): ServiceOption[] {
     return [['browserstack', {
@@ -54,12 +55,14 @@ export function getTestBotCapabilities(): RequestedStandaloneCapabilities[] {
     if (context.platform === TestBotPlatform.Android) {
 
         // ── LOCAL PHYSICAL DEVICE ─────────────
+        // No BrowserStack options at all
+        // Appium connects directly to your device
+        // Device name and OS version are auto
+        // detected from the connected device
         if (isLocal) {
-            console.log('▶ Capabilities: LOCAL Android device UDID=R5GL10H8QFT')
+            console.log('▶ Running on LOCAL Android device UDID=R5GL10H8QFT')
             return [{
                 platformName: 'Android',
-                'appium:deviceName': 'R5GL10H8QFT',
-                'appium:platformVersion': process.env.BROWSERSTACK_OS_VERSION || '14.0',
                 'appium:automationName': 'UiAutomator2',
                 'appium:autoGrantPermissions': true,
                 'appium:udid': 'R5GL10H8QFT',
@@ -71,7 +74,7 @@ export function getTestBotCapabilities(): RequestedStandaloneCapabilities[] {
         }
 
         // ── BROWSERSTACK CLOUD ────────────────
-        console.log('▶ Capabilities: BROWSERSTACK Android cloud')
+        console.log('▶ Running on BROWSERSTACK Android cloud')
         return [{
             platformName: 'Android',
             'appium:deviceName': process.env.BROWSERSTACK_DEVICE_NAME || 'Google Pixel 8 Pro',
@@ -97,11 +100,9 @@ export function getTestBotCapabilities(): RequestedStandaloneCapabilities[] {
 
         // ── LOCAL PHYSICAL DEVICE ─────────────
         if (isLocal) {
-            console.log('▶ Capabilities: LOCAL iOS device')
+            console.log('▶ Running on LOCAL iOS device UDID=R5GL10H8QFT')
             return [{
                 platformName: 'iOS',
-                'appium:deviceName': process.env.BROWSERSTACK_DEVICE_NAME || 'iPhone',
-                'appium:platformVersion': process.env.BROWSERSTACK_OS_VERSION || '18',
                 'appium:automationName': 'XCUITest',
                 'appium:autoGrantPermissions': true,
                 'appium:udid': 'R5GL10H8QFT',
@@ -112,7 +113,7 @@ export function getTestBotCapabilities(): RequestedStandaloneCapabilities[] {
         }
 
         // ── BROWSERSTACK CLOUD ────────────────
-        console.log('▶ Capabilities: BROWSERSTACK iOS cloud')
+        console.log('▶ Running on BROWSERSTACK iOS cloud')
         return [{
             platformName: 'iOS',
             'appium:deviceName': process.env.BROWSERSTACK_DEVICE_NAME || 'iPhone 16 Pro',
