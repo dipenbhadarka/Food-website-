@@ -30,52 +30,61 @@ const factory = new TestBotFactory();
 export var testBot: ITestBot = factory.createTestBot(context)
 
 // ─────────────────────────────────────────────
-// Run mode helper
-// "browserstack" = BrowserStack cloud device
+// Run mode
 // "local"        = your own physical device
+// "browserstack" = BrowserStack cloud device
 // ─────────────────────────────────────────────
-const isLocalDevice = process.env.RUN_MODE === 'local';
+const isLocal = process.env.RUN_MODE === 'local';
 
 // ─────────────────────────────────────────────
 // BrowserStack Services
 // ─────────────────────────────────────────────
 export function getTestBotServices(): ServiceOption[] {
-    if (isLocalDevice) {
-        return [['browserstack', {
-            app: process.env.BROWSERSTACK_APP,
-            browserstackLocal: true,
-        }]]
-    }
     return [['browserstack', {
         app: process.env.BROWSERSTACK_APP,
     }]]
 }
 
 // ─────────────────────────────────────────────
-// BrowserStack Capabilities
+// Capabilities
 // ─────────────────────────────────────────────
 export function getTestBotCapabilities(): RequestedStandaloneCapabilities[] {
 
     // ── Android ───────────────────────────────
     if (context.platform === TestBotPlatform.Android) {
 
-        const androidCaps: any = {
+        // ── LOCAL PHYSICAL DEVICE ─────────────
+        // Uses package name + activity to launch
+        // the app already installed on your device
+        // No bstack:options — purely local Appium
+        if (isLocal) {
+            console.log('▶ Capabilities: LOCAL Android device')
+            return [{
+                platformName: 'Android',
+                'appium:deviceName': process.env.BROWSERSTACK_DEVICE_NAME || 'Android Device',
+                'appium:platformVersion': process.env.BROWSERSTACK_OS_VERSION || '14.0',
+                'appium:automationName': 'UiAutomator2',
+                'appium:autoGrantPermissions': true,
+                'appium:udid': process.env.BROWSERSTACK_DEVICE_UDID,
+
+                // ── App launch by package name ──
+                // No file path needed — launches
+                // the app already on your device
+                'appium:appPackage': 'com.personcentredsoftware.care.delivery',
+                'appium:appActivity': 'com.personcentredsoftware.care.delivery.MainActivity',
+                'appium:noReset': true,
+                'appium:fullReset': false,
+            } as any]
+        }
+
+        // ── BROWSERSTACK CLOUD ────────────────
+        console.log('▶ Capabilities: BROWSERSTACK Android cloud')
+        return [{
             platformName: 'Android',
             'appium:deviceName': process.env.BROWSERSTACK_DEVICE_NAME || 'Google Pixel 8 Pro',
             'appium:platformVersion': process.env.BROWSERSTACK_OS_VERSION || '14.0',
             'appium:automationName': 'UiAutomator2',
             'appium:autoGrantPermissions': true,
-
-            // ─────────────────────────────────────────────
-            // ↓↓↓ ADD YOUR PHYSICAL DEVICE UDID HERE ↓↓↓
-            // Only active when RUN_MODE=local in your .env
-            // Get your UDID by running: adb devices
-            // Example: 'appium:udid': 'RF8M31XXXXX'
-            // ─────────────────────────────────────────────
-            ...(isLocalDevice && {
-                'appium:udid': process.env.BROWSERSTACK_DEVICE_UDID || 'ADD_YOUR_UDID_HERE',
-            }),
-
             'bstack:options': {
                 userName: process.env.BROWSERSTACK_USERNAME,
                 accessKey: process.env.BROWSERSTACK_ACCESS_KEY,
@@ -86,36 +95,39 @@ export function getTestBotCapabilities(): RequestedStandaloneCapabilities[] {
                 idleTimeout: 300,
                 appiumLogs: true,
                 debug: true,
-                ...(isLocalDevice && {
-                    local: true,
-                    localIdentifier: 'MyLocalDevice',
-                }),
             },
-        }
-
-        return [androidCaps]
+        } as any]
     }
 
     // ── iOS ───────────────────────────────────
     else if (context.platform === TestBotPlatform.iOS) {
 
-        const iOSCaps: any = {
+        // ── LOCAL PHYSICAL DEVICE ─────────────
+        if (isLocal) {
+            console.log('▶ Capabilities: LOCAL iOS device')
+            return [{
+                platformName: 'iOS',
+                'appium:deviceName': process.env.BROWSERSTACK_DEVICE_NAME || 'iPhone',
+                'appium:platformVersion': process.env.BROWSERSTACK_OS_VERSION || '18',
+                'appium:automationName': 'XCUITest',
+                'appium:autoGrantPermissions': true,
+                'appium:udid': process.env.BROWSERSTACK_DEVICE_UDID,
+
+                // ── App launch by bundle ID ──
+                'appium:bundleId': 'com.personcentredsoftware.care.delivery',
+                'appium:noReset': true,
+                'appium:fullReset': false,
+            } as any]
+        }
+
+        // ── BROWSERSTACK CLOUD ────────────────
+        console.log('▶ Capabilities: BROWSERSTACK iOS cloud')
+        return [{
             platformName: 'iOS',
             'appium:deviceName': process.env.BROWSERSTACK_DEVICE_NAME || 'iPhone 16 Pro',
             'appium:platformVersion': process.env.BROWSERSTACK_OS_VERSION || '18',
             'appium:automationName': 'XCUITest',
             'appium:autoGrantPermissions': true,
-
-            // ─────────────────────────────────────────────
-            // ↓↓↓ ADD YOUR PHYSICAL DEVICE UDID HERE ↓↓↓
-            // Only active when RUN_MODE=local in your .env
-            // Get your UDID by running: instruments -s devices
-            // Example: 'appium:udid': '00008110-XXXXXXXXXXXXXX'
-            // ─────────────────────────────────────────────
-            ...(isLocalDevice && {
-                'appium:udid': process.env.BROWSERSTACK_DEVICE_UDID || 'ADD_YOUR_UDID_HERE',
-            }),
-
             'bstack:options': {
                 userName: process.env.BROWSERSTACK_USERNAME,
                 accessKey: process.env.BROWSERSTACK_ACCESS_KEY,
@@ -126,14 +138,8 @@ export function getTestBotCapabilities(): RequestedStandaloneCapabilities[] {
                 idleTimeout: 300,
                 appiumLogs: true,
                 debug: true,
-                ...(isLocalDevice && {
-                    local: true,
-                    localIdentifier: 'MyLocalDevice',
-                }),
             },
-        }
-
-        return [iOSCaps]
+        } as any]
     }
 
     return []
