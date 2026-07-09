@@ -212,13 +212,8 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
 
     // ── Step 1: Welcome screen ─────────────────
     it('Step 1 - App opens to Welcome screen with region dropdown and disabled Enrol button', async () => {
-        // Wait for splash screen to finish
         await driver.pause(3000)
-
-        // Region dropdown should be visible
         await testBot.waitUntilVisible(selectors.regionDropdown, 15000)
-
-        // Enrol button should be visible but disabled
         await testBot.waitUntilVisible(selectors.enrollDeviceButton, 5000)
         const enrolBtn = await $(
             '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/LoginButton"]'
@@ -229,14 +224,9 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
 
     // ── Step 2: Select United Kingdom ──────────
     it('Step 2 - Select United Kingdom and verify Enrol button becomes enabled', async () => {
-        // Open region dropdown
         await testBot.click(selectors.regionDropdown)
-
-        // Wait for picker and select UK
         await testBot.waitUntilVisible(selectors.optionUnitedKingdom, 10000)
         await testBot.click(selectors.optionUnitedKingdom)
-
-        // Enrol button should now be enabled
         const enrolBtn = await $(
             '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/LoginButton"]'
         )
@@ -247,8 +237,6 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
     // ── Step 3: Click Enrol device ─────────────
     it('Step 3 - Click Enrol device and land on Username page', async () => {
         await testBot.click(selectors.enrollDeviceButton)
-
-        // Identity username page should load
         await testBot.waitUntilVisible(selectors.usernameField, 15000)
     })
 
@@ -257,16 +245,12 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         await testBot.click(selectors.usernameField)
         await testBot.enterText(selectors.usernameField, USERNAME)
         await testBot.click(selectors.nextButton)
-
-        // PCS Terms page — Continue button should appear
         await testBot.waitUntilVisible(selectors.continueButton, 15000)
     })
 
     // ── Step 5: Click Continue ─────────────────
     it('Step 5 - Click Continue and land on Password page', async () => {
         await testBot.click(selectors.continueButton)
-
-        // Password page should load
         await testBot.waitUntilVisible(selectors.passwordField, 15000)
     })
 
@@ -274,8 +258,6 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
     it('Step 6 - Enter password and navigate to Enrol page', async () => {
         await testBot.enterText(selectors.passwordField, PASSWORD)
         await testBot.click(selectors.loginButton)
-
-        // Enrol page — organisation and location dropdowns should appear
         await testBot.waitUntilVisible(selectors.organisationDropdown, 15000)
         await testBot.waitUntilVisible(selectors.locationDropdown, 5000)
         await testBot.waitUntilVisible(selectors.enrolButton, 5000)
@@ -283,19 +265,14 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
 
     // ── Step 7: Select Organisation & Location ──
     it('Step 7 - Select Organisation and Location; verify Enrol button is enabled', async () => {
-        // Serial number and device name are left blank — no action needed
-
-        // Select Organisation
         await testBot.click(selectors.organisationDropdown)
         await testBot.waitUntilVisible(pickerOption(ORGANISATION), 10000)
         await testBot.click(pickerOption(ORGANISATION))
 
-        // Select Location
         await testBot.click(selectors.locationDropdown)
         await testBot.waitUntilVisible(pickerOption(LOCATION), 10000)
         await testBot.click(pickerOption(LOCATION))
 
-        // Enrol button should now be enabled
         const enrolBtn = await $(
             '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/EnrollButton"]'
         )
@@ -306,16 +283,12 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
     // ── Step 8: Click Enrol ────────────────────
     it('Step 8 - Click Enrol and see Device Enrolled page with Logout button', async () => {
         await testBot.click(selectors.enrolButton)
-
-        // Device Enrolled page — Logout button should appear
         await testBot.waitUntilVisible(selectors.logoutButton, 20000)
     })
 
     // ── Step 9: Click Log Out ──────────────────
     it('Step 9 - Click Log Out and land on Log In page', async () => {
         await testBot.click(selectors.logoutButton)
-
-        // Log In page — location dropdown should be visible
         await testBot.waitUntilVisible(selectors.locationPickerLogin, 15000)
     })
 
@@ -323,7 +296,6 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
     it('Step 10.1 - App opens on Username selection screen; Sign In button is disabled', async () => {
         await testBot.waitUntilVisible(selectors.userDropdown, 10000)
         await testBot.waitUntilVisible(selectors.signInButton, 5000)
-
         const signInBtn = await $(
             '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/SignInButton"]'
         )
@@ -343,8 +315,6 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
     // ── Step 10.3 ─────────────────────────────
     it('Step 10.3 - Open user dropdown and verify users for selected location are shown', async () => {
         await testBot.click(selectors.userDropdown)
-
-        // Akhila Nethi should be visible in the list
         await testBot.waitUntilVisible(pickerOption(USER), 10000)
         const isVisible = await testBot.isVisible(pickerOption(USER))
         expect(isVisible).toBe(true)
@@ -353,7 +323,6 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
     // ── Step 10.4 ─────────────────────────────
     it('Step 10.4 - Select user and verify Sign In button becomes enabled', async () => {
         await testBot.click(pickerOption(USER))
-
         const signInBtn = await $(
             '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/SignInButton"]'
         )
@@ -376,14 +345,11 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
     // ── Step 10.7 ─────────────────────────────
     it('Step 10.7 - Enter password and verify it is hidden', async () => {
         await testBot.enterText(selectors.passwordField, PASSWORD)
-
-        // Verify password field is a secure/password type
         const pwField = await $(
             '//android.widget.EditText[@resource-id="Password"]'
         )
         const inputType = await pwField.getAttribute('password')
         expect(inputType).toBeTruthy()
-
         await testBot.click(selectors.loginButton)
     })
 
@@ -393,9 +359,13 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
     })
 
     // ── Step 10.9 ─────────────────────────────
-    it('Step 10.9 - Select Kerr House community, click Start Work and land on My Communities tab', async () => {
-        await testBot.click(selectors.kerrHouseServiceUsers)
-        await testBot.waitUntilVisible(selectors.startWorkButton, 5000)
+    it('Step 10.9 - Click Start Work and land on My Communities tab', async () => {
+        // NB: "Kerr House / Service Users" checkbox
+        // is already ticked by default on this screen.
+        // Do NOT tap it — that would untick it and
+        // keep Start Work disabled.
+        // Just click Start Work directly.
+        await testBot.waitUntilVisible(selectors.startWorkButton, 10000)
         await testBot.click(selectors.startWorkButton)
 
         // My Communities tab should now be visible
