@@ -43,8 +43,6 @@ const selectors = {
     } as TestBotElement,
 
     // ── Identity / Username page (WebView) ────
-    // NB: Username page is a WebView — needs
-    // context switch to interact with it
     usernameField: {
         android: AndroidLocatorBuilder.xpath(
             '//android.view.View[@resource-id="AccountLogin"]/android.view.View'
@@ -68,8 +66,9 @@ const selectors = {
         ios: iOSLocatorBuilder.id('Password'),
     } as TestBotElement,
 
-    // NB: This is the identity page login button
-    // different from the enrol device button
+    // NB: Identity page login button
+    // Different from enrol device button which
+    // has full package name prefix
     identityLoginButton: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.Button[@resource-id="LoginButton"]'
@@ -130,26 +129,15 @@ const selectors = {
     } as TestBotElement,
 
     // ── Communities page ──────────────────────
-    // NB: This is the checkbox row — tapping
-    // once selects it, tapping again deselects
-    // So we check if already selected before tapping
+    // NB: Kerr House is selected by default
+    // by the app — we only verify it is visible
+    // and go straight to Start Work
     kerrHouseServiceUsers: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.TextView[@text="Kerr House / Service Users"]'
         ),
         ios: iOSLocatorBuilder.xpath(
             '//XCUIElementTypeStaticText[@name="Kerr House / Service Users"]'
-        ),
-    } as TestBotElement,
-
-    // NB: Separate selector for the checkbox
-    // itself to check selected state
-    kerrHouseCheckbox: {
-        android: AndroidLocatorBuilder.xpath(
-            '//android.widget.CheckBox[@text="Kerr House / Service Users"]'
-        ),
-        ios: iOSLocatorBuilder.xpath(
-            '//XCUIElementTypeButton[@name="Kerr House / Service Users"]'
         ),
     } as TestBotElement,
 
@@ -229,29 +217,46 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
     it('Step 3 - Click Enrol device and land on Username page', async () => {
         await testBot.click(selectors.enrollDeviceButton)
 
-        // NB: Identity page is a WebView — give
-        // it extra time to load
-        await driver.pause(3000)
+        // NB: Identity page is a WebView
+        // Give it extra time to load
+        await driver.pause(5000)
+
+        // Switch to WebView context
+        const contexts = await driver.getContexts()
+        console.log('Available contexts:', contexts)
+
+        const webviewContext = contexts.find(
+            (c: string) => c.includes('WEBVIEW')
+        )
+
+        if (webviewContext) {
+            await driver.switchContext(webviewContext)
+            console.log('Switched to WebView:', webviewContext)
+        } else {
+            console.warn('No WebView found — staying in NATIVE')
+        }
+
         await testBot.waitUntilVisible(selectors.usernameField, 20000)
     })
 
     // ── Step 4: Enter username ──────────────────
     it('Step 4 - Enter username and navigate to PCS Terms page', async () => {
-        // NB: WebView username field needs a tap
-        // first to focus it before typing
         await testBot.click(selectors.usernameField)
         await driver.pause(1000)
 
-        // Type username character by character
         await testBot.enterText(selectors.usernameField, USERNAME, false)
         await driver.pause(500)
 
-        // Press Enter key to submit username
-        // NB: keycode 66 = Enter/Next on Android
+        // Press Enter key — keycode 66 = Enter on Android
         await driver.pressKeyCode(66)
+        await driver.pause(2000)
 
-        // PCS Terms page — Continue button should appear
+        // Switch back to NATIVE context
+        await driver.switchContext('NATIVE_APP')
+        console.log('Switched back to NATIVE_APP')
         await driver.pause(3000)
+
+        // PCS Terms page
         await testBot.waitUntilVisible(selectors.continueButton, 20000)
     })
 
@@ -260,7 +265,6 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         await testBot.click(selectors.continueButton)
         await driver.pause(2000)
 
-        // Password page should load
         await testBot.waitUntilVisible(selectors.passwordField, 20000)
     })
 
@@ -268,18 +272,16 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
     it('Step 6 - Enter password and navigate to Enrol page', async () => {
         await testBot.click(selectors.passwordField)
         await driver.pause(500)
+
         await testBot.enterText(selectors.passwordField, PASSWORD, false)
         await driver.pause(500)
 
-        // NB: Using identityLoginButton here which
-        // has resource-id="LoginButton" — different
-        // from the enrol device button which has
-        // the full package name prefix
+        // NB: identityLoginButton has resource-id="LoginButton"
+        // without the full package name prefix
         await testBot.click(selectors.identityLoginButton)
         await driver.pause(3000)
 
-        // Enrol page — organisation and location
-        // dropdowns should appear
+        // Enrol page
         await testBot.waitUntilVisible(selectors.organisationDropdown, 20000)
         await testBot.waitUntilVisible(selectors.locationDropdown, 5000)
         await testBot.waitUntilVisible(selectors.enrolButton, 5000)
@@ -315,7 +317,7 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
     it('Step 8 - Click Enrol and see Device Enrolled page with Logout button', async () => {
         await testBot.click(selectors.enrolButton)
 
-        // NB: Enrolment can take a few seconds
+        // NB: Enrolment can take time
         await testBot.waitUntilVisible(selectors.logoutButton, 30000)
     })
 
@@ -324,7 +326,6 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         await testBot.click(selectors.logoutButton)
         await driver.pause(2000)
 
-        // Log In page — location dropdown should be visible
         await testBot.waitUntilVisible(selectors.locationPickerLogin, 15000)
     })
 
@@ -354,7 +355,6 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         await testBot.click(selectors.userDropdown)
         await driver.pause(1000)
 
-        // Akhila Nethi should be visible in the list
         await testBot.waitUntilVisible(pickerOption(USER), 10000)
         const isVisible = await testBot.isVisible(pickerOption(USER))
         expect(isVisible).toBe(true)
@@ -402,35 +402,17 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
     })
 
     // ── Step 10.9 ─────────────────────────────
-    it('Step 10.9 - Select Kerr House community, click Start Work and land on My Communities tab', async () => {
+    it('Step 10.9 - Kerr House already selected by default, click Start Work and land on My Communities tab', async () => {
         await driver.pause(1000)
 
-        // NB: This is the KEY FIX — the community
-        // list item acts like a checkbox. If it is
-        // already selected from a previous run it
-        // will be deselected if tapped again.
-        // So we check its selected state first and
-        // only tap if it is NOT already selected.
-        const communityItem = await $(
-            '//android.widget.TextView[@text="Kerr House / Service Users"]'
-        )
-        await communityItem.waitForDisplayed({ timeout: 10000 })
+        // NB: Kerr House / Service Users is
+        // selected by default by the app
+        // DO NOT tap it — tapping would deselect it
+        // Just verify it is visible then proceed
+        await testBot.waitUntilVisible(selectors.kerrHouseServiceUsers, 10000)
+        console.log('Kerr House already selected by default — skipping tap')
 
-        // Check if already selected
-        const isSelected = await communityItem.getAttribute('checked')
-
-        if (isSelected === 'true') {
-            // Already selected — do not tap again
-            console.log('Kerr House already selected — skipping tap')
-        } else {
-            // Not selected — tap to select it
-            console.log('Selecting Kerr House community')
-            await testBot.click(selectors.kerrHouseServiceUsers)
-        }
-
-        await driver.pause(1000)
-
-        // Start Work button should now be enabled
+        // Go straight to Start Work
         await testBot.waitUntilVisible(selectors.startWorkButton, 5000)
         await testBot.click(selectors.startWorkButton)
 
