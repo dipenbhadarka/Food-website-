@@ -227,9 +227,10 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         await testBot.enterText(selectors.usernameField, USERNAME, false)
         await driver.pause(500)
 
-        // NB: pressKeyCode is not supported by this
-        // Appium driver. Use mobile: performEditorAction
-        // instead to simulate pressing "Next" on keyboard
+        // NB: pressKeyCode is NOT supported on this
+        // Appium driver (confirmed from error log).
+        // Use mobile: performEditorAction instead to
+        // simulate pressing "Next" on the keyboard.
         await driver.execute('mobile: performEditorAction', { action: 'next' })
 
         await testBot.waitUntilVisible(selectors.continueButton, 15000)
@@ -333,6 +334,9 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
     })
 
     it('Step 10.9 - Click Start Work and land on My Communities tab', async () => {
+        // NB: "Kerr House / Service Users" checkbox
+        // is already ticked by default. Do NOT tap
+        // it — just click Start Work directly.
         await testBot.waitUntilVisible(selectors.startWorkButton, 10000)
         await testBot.click(selectors.startWorkButton)
         await testBot.waitUntilVisible(selectors.myCommunitiesTab, 15000)
