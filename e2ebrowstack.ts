@@ -17,7 +17,6 @@ const USER = 'Akhila Nethi'
 // ─────────────────────────────────────────────
 const selectors = {
 
-    // ── Welcome / Landing screen ──────────────
     regionDropdown: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/EnvironmentPicker"]'
@@ -32,7 +31,6 @@ const selectors = {
         ios: iOSLocatorBuilder.id('LoginButton'),
     } as TestBotElement,
 
-    // ── Region picker options ─────────────────
     optionUnitedKingdom: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.TextView[@resource-id="android:id/text1" and @text="United Kingdom"]'
@@ -49,7 +47,6 @@ const selectors = {
         ios: iOSLocatorBuilder.id('Cancel'),
     } as TestBotElement,
 
-    // ── Identity / Username page (WebView) ────
     usernameField: {
         android: AndroidLocatorBuilder.xpath(
             '//android.view.View[@resource-id="AccountLogin"]/android.view.View'
@@ -57,7 +54,6 @@ const selectors = {
         ios: iOSLocatorBuilder.id('AccountLogin'),
     } as TestBotElement,
 
-    // ── PCS Terms page ────────────────────────
     continueButton: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.Button[@resource-id="ContinueButton"]'
@@ -65,7 +61,6 @@ const selectors = {
         ios: iOSLocatorBuilder.id('ContinueButton'),
     } as TestBotElement,
 
-    // ── Password page ─────────────────────────
     passwordField: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.EditText[@resource-id="Password"]'
@@ -96,7 +91,6 @@ const selectors = {
         ios: iOSLocatorBuilder.id('LoginButton'),
     } as TestBotElement,
 
-    // ── Enrol page ────────────────────────────
     deviceNameField: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.TextView[@text="Enter location of device"]'
@@ -127,7 +121,6 @@ const selectors = {
         ios: iOSLocatorBuilder.id('EnrollButton'),
     } as TestBotElement,
 
-    // ── Device Enrolled page ──────────────────
     logoutButton: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/LogoutButton"]'
@@ -135,7 +128,6 @@ const selectors = {
         ios: iOSLocatorBuilder.id('LogoutButton'),
     } as TestBotElement,
 
-    // ── Log In page (post-enrolment) ──────────
     locationPickerLogin: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/LocationPicker"]'
@@ -157,7 +149,6 @@ const selectors = {
         ios: iOSLocatorBuilder.id('SignInButton'),
     } as TestBotElement,
 
-    // ── Communities page ──────────────────────
     kerrHouseServiceUsers: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.TextView[@text="Kerr House / Service Users"]'
@@ -203,7 +194,6 @@ function pickerOption(text: string): TestBotElement {
 // ─────────────────────────────────────────────
 describe('Care Delivery - Full Enrolment & Login Flow', () => {
 
-    // ── Step 1: Welcome screen ─────────────────
     it('Step 1 - App opens to Welcome screen with region dropdown and disabled Enrol button', async () => {
         await driver.pause(3000)
         await testBot.waitUntilVisible(selectors.regionDropdown, 15000)
@@ -215,7 +205,6 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         expect(isEnabled).toBe(false)
     })
 
-    // ── Step 2: Select United Kingdom ──────────
     it('Step 2 - Select United Kingdom and verify Enrol button becomes enabled', async () => {
         await testBot.click(selectors.regionDropdown)
         await testBot.waitUntilVisible(selectors.optionUnitedKingdom, 10000)
@@ -227,37 +216,30 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         expect(isEnabled).toBe(true)
     })
 
-    // ── Step 3: Click Enrol device ─────────────
     it('Step 3 - Click Enrol device and land on Username page', async () => {
         await testBot.click(selectors.enrollDeviceButton)
         await driver.pause(3000)
         await testBot.waitUntilVisible(selectors.usernameField, 20000)
     })
 
-    // ── Step 4: Enter username ──────────────────
     it('Step 4 - Enter username and navigate to PCS Terms page', async () => {
-        // NB: This page is a WebView-based identity
-        // login page. Tapping a "Next" button by
-        // text was unreliable. Instead, we type
-        // the username then press the Enter/Go
-        // key on the keyboard to submit.
         await testBot.click(selectors.usernameField)
         await testBot.enterText(selectors.usernameField, USERNAME, false)
         await driver.pause(500)
 
-        // Press Enter/Go key to submit
-        await driver.pressKeyCode(66)
+        // NB: pressKeyCode is not supported by this
+        // Appium driver. Use mobile: performEditorAction
+        // instead to simulate pressing "Next" on keyboard
+        await driver.execute('mobile: performEditorAction', { action: 'next' })
 
         await testBot.waitUntilVisible(selectors.continueButton, 15000)
     })
 
-    // ── Step 5: Click Continue ─────────────────
     it('Step 5 - Click Continue and land on Password page', async () => {
         await testBot.click(selectors.continueButton)
         await testBot.waitUntilVisible(selectors.passwordField, 15000)
     })
 
-    // ── Step 6: Enter password ─────────────────
     it('Step 6 - Enter password and navigate to Enrol page', async () => {
         await testBot.enterText(selectors.passwordField, PASSWORD)
         await testBot.click(selectors.loginButton)
@@ -266,7 +248,6 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         await testBot.waitUntilVisible(selectors.enrolButton, 5000)
     })
 
-    // ── Step 7: Select Organisation & Location ──
     it('Step 7 - Select Organisation and Location; verify Enrol button is enabled', async () => {
         await testBot.click(selectors.organisationDropdown)
         await testBot.waitUntilVisible(pickerOption(ORGANISATION), 10000)
@@ -283,19 +264,16 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         expect(isEnabled).toBe(true)
     })
 
-    // ── Step 8: Click Enrol ────────────────────
     it('Step 8 - Click Enrol and see Device Enrolled page with Logout button', async () => {
         await testBot.click(selectors.enrolButton)
         await testBot.waitUntilVisible(selectors.logoutButton, 20000)
     })
 
-    // ── Step 9: Click Log Out ──────────────────
     it('Step 9 - Click Log Out and land on Log In page', async () => {
         await testBot.click(selectors.logoutButton)
         await testBot.waitUntilVisible(selectors.locationPickerLogin, 15000)
     })
 
-    // ── Step 10.1 ─────────────────────────────
     it('Step 10.1 - App opens on Username selection screen; Sign In button is disabled', async () => {
         await testBot.waitUntilVisible(selectors.userDropdown, 10000)
         await testBot.waitUntilVisible(selectors.signInButton, 5000)
@@ -306,7 +284,6 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         expect(isEnabled).toBe(false)
     })
 
-    // ── Step 10.2 ─────────────────────────────
     it('Step 10.2 - Location field is populated with Kerr House', async () => {
         const locationEl = await $(
             '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/LocationPicker"]'
@@ -315,7 +292,6 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         expect(locationValue).toContain(LOCATION)
     })
 
-    // ── Step 10.3 ─────────────────────────────
     it('Step 10.3 - Open user dropdown and verify users for selected location are shown', async () => {
         await testBot.click(selectors.userDropdown)
         await testBot.waitUntilVisible(pickerOption(USER), 10000)
@@ -323,7 +299,6 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         expect(isVisible).toBe(true)
     })
 
-    // ── Step 10.4 ─────────────────────────────
     it('Step 10.4 - Select user and verify Sign In button becomes enabled', async () => {
         await testBot.click(pickerOption(USER))
         const signInBtn = await $(
@@ -333,19 +308,16 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         expect(isEnabled).toBe(true)
     })
 
-    // ── Step 10.5 ─────────────────────────────
     it('Step 10.5 - Click Sign In and land on PCS Terms page', async () => {
         await testBot.click(selectors.signInButton)
         await testBot.waitUntilVisible(selectors.continueButton, 15000)
     })
 
-    // ── Step 10.6 ─────────────────────────────
     it('Step 10.6 - Click Continue and land on Password page', async () => {
         await testBot.click(selectors.continueButton)
         await testBot.waitUntilVisible(selectors.passwordField, 15000)
     })
 
-    // ── Step 10.7 ─────────────────────────────
     it('Step 10.7 - Enter password and verify it is hidden', async () => {
         await testBot.enterText(selectors.passwordField, PASSWORD)
         const pwField = await $(
@@ -356,17 +328,11 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         await testBot.click(selectors.loginButton)
     })
 
-    // ── Step 10.8 ─────────────────────────────
     it('Step 10.8 - User is taken to Select Communities page', async () => {
         await testBot.waitUntilVisible(selectors.kerrHouseServiceUsers, 20000)
     })
 
-    // ── Step 10.9 ─────────────────────────────
     it('Step 10.9 - Click Start Work and land on My Communities tab', async () => {
-        // NB: "Kerr House / Service Users" checkbox
-        // is already ticked by default. Do NOT tap
-        // it — that would untick it. Just click
-        // Start Work directly.
         await testBot.waitUntilVisible(selectors.startWorkButton, 10000)
         await testBot.click(selectors.startWorkButton)
         await testBot.waitUntilVisible(selectors.myCommunitiesTab, 15000)
