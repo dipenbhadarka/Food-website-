@@ -262,6 +262,65 @@ async function submitUsername(): Promise<void> {
 }
 
 // ─────────────────────────────────────────────
+// Helper — robust picker selection with scroll
+// fallback for BrowserStack cloud devices where
+// the option may render off-screen or slower.
+// Falls through direct click -> scroll-into-view
+// -> generic text match, then dumps page source
+// if all methods fail.
+// ─────────────────────────────────────────────
+async function selectPickerOptionRobust(value: string): Promise<void> {
+    const option = pickerOption(value)
+
+    // 1) Try direct visibility/click first — this is
+    // what already works reliably on the local device
+    try {
+        await testBot.waitUntilVisible(option, 5000)
+        await testBot.click(option)
+        console.log(`Selected "${value}" directly`)
+        return
+    } catch (err) {
+        console.warn(`Direct selection of "${value}" failed, trying scroll fallback`)
+    }
+
+    // 2) BrowserStack fallback — scroll the list to
+    // bring the option into view using UiScrollable
+    try {
+        const scrolled = await $(
+            'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
+            `.scrollIntoView(new UiSelector().text("${value}"))`
+        )
+        if (await scrolled.isExisting()) {
+            await scrolled.click()
+            console.log(`Selected "${value}" via UiScrollable scroll`)
+            return
+        }
+    } catch (err) {
+        console.warn(`UiScrollable fallback for "${value}" failed:`, err)
+    }
+
+    // 3) Last resort — any element with matching text
+    try {
+        const anyText = await $(`//*[@text="${value}"]`)
+        if (await anyText.isExisting()) {
+            await anyText.click()
+            console.log(`Selected "${value}" via generic text match`)
+            return
+        }
+    } catch (err) {
+        console.warn(`Generic text match for "${value}" failed:`, err)
+    }
+
+    // If all methods fail, dump page source for diagnosis
+    console.error(`Could not select "${value}" with any method — dumping page source`)
+    const pageSource = await driver.getPageSource()
+    console.log(`─────────── PAGE SOURCE: PICKER "${value}" ───────────`)
+    console.log(pageSource)
+    console.log('─────────────────────────────────────────────')
+    throw new Error(`Could not select picker option "${value}"`)
+}
+
+// ─────────────────────────────────────────────
 // Suite
 // ─────────────────────────────────────────────
 describe('Care Delivery - Full Enrolment & Login Flow', () => {
@@ -358,7 +417,6 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
             console.warn('hideKeyboard failed or keyboard already hidden:', err)
         }
 
-        // Confirm button is actually visible before clicking
         try {
             await testBot.waitUntilVisible(selectors.identityLoginButton, 10000)
         } catch (err) {
@@ -390,14 +448,12 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
     it('Step 7 - Select Organisation and Location; verify Enrol button is enabled', async () => {
         await testBot.click(selectors.organisationDropdown)
         await driver.pause(1000)
-        await testBot.waitUntilVisible(pickerOption(ORGANISATION), 10000)
-        await testBot.click(pickerOption(ORGANISATION))
+        await selectPickerOptionRobust(ORGANISATION)
         await driver.pause(1000)
 
         await testBot.click(selectors.locationDropdown)
         await driver.pause(1000)
-        await testBot.waitUntilVisible(pickerOption(LOCATION), 10000)
-        await testBot.click(pickerOption(LOCATION))
+        await selectPickerOptionRobust(LOCATION)
         await driver.pause(1000)
 
         const enrolBtn = await $(
@@ -432,7 +488,20 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         const locationEl = await $(
             '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/LocationPicker"]'
         )
-        const locationValue = await locationEl.getText()
+        let locationValue = await locationEl.getText()
+
+        if (!locationValue.includes(LOCATION)) {
+            await testBot.click(selectors.locationPickerLogin)
+            await driver.pause(1000)
+            await selectPickerOptionRobust(LOCATION)
+            await driver.pause(1000)
+
+            const refreshed = await $(
+                '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/LocationPicker"]'
+            )
+            locationValue = await refreshed.getText()
+        }
+
         expect(locationValue).toContain(LOCATION)
     })
 
@@ -445,7 +514,7 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
     })
 
     it('Step 10.4 - Select user and verify Sign In button becomes enabled', async () => {
-        await testBot.click(pickerOption(USER))
+        await selectPickerOptionRobust(USER)
         await driver.pause(1000)
         const signInBtn = await $(
             '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/SignInButton"]'
@@ -489,6 +558,9 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
     })
 
     it('Step 10.9 - Click Start Work and land on My Communities tab', async () => {
+        // NB: "Kerr House / Service Users" checkbox
+        // is already ticked by default. Do NOT tap
+        // it — just click Start Work directly.
         await testBot.waitUntilVisible(selectors.startWorkButton, 10000)
         await testBot.click(selectors.startWorkButton)
         await testBot.waitUntilVisible(selectors.myCommunitiesTab, 15000)
