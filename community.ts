@@ -227,6 +227,15 @@ const residentSelectors = {
         ios: iOSLocatorBuilder.id('ExpandArrow'),
     } as TestBotElement,
 
+    clinicalScrollView: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.view.ViewGroup[@resource-id="com.personcentredsoftware.care.delivery:id/ProfileClinicalPage"]/android.view.ViewGroup/android.widget.ScrollView'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeScrollView'
+        ),
+    } as TestBotElement,
+
     closeCrossButton: {
         android: AndroidLocatorBuilder.xpath(
             '//android.view.ViewGroup[@resource-id="com.personcentredsoftware.care.delivery:id/ProfilePage"]/android.view.ViewGroup/android.view.ViewGroup[1]/android.view.ViewGroup[1]/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup[2]/android.view.ViewGroup/android.widget.Button'
@@ -754,13 +763,46 @@ describe('Care Delivery - Resident Profile Clinical Observations Flow', () => {
         }
     })
 
-    it('Step 15 - Tap the expand arrow on the observation entry', async () => {
+    it('Step 15 - Tap the arrow to expand the observation section and scroll to see all content', async () => {
         try {
             await testBot.waitUntilVisible(residentSelectors.expandArrowButton, 15000)
+
+            // NB: This arrow TOGGLES the section — first tap
+            // opens it, a second tap would close it again.
+            // We only tap once here to open it.
             await testBot.click(residentSelectors.expandArrowButton)
             await driver.pause(1500)
+
+            // Scroll down within the clinical page's scroll
+            // view to reveal all the expanded content
+            try {
+                const scrollViewEl = await $(
+                    await (testBot as any).getLocatorTextForElement(residentSelectors.clinicalScrollView)
+                )
+                await driver.execute('mobile: scrollGesture', {
+                    elementId: scrollViewEl.elementId,
+                    direction: 'down',
+                    percent: 0.75,
+                })
+                console.log('Scrolled down within clinical scroll view')
+                await driver.pause(1000)
+            } catch (err) {
+                console.warn('scrollGesture on scroll view failed, trying generic swipe:', err)
+                const { width, height } = await driver.getWindowSize()
+                await driver.execute('mobile: swipeGesture', {
+                    left: Math.floor(width * 0.2),
+                    top: Math.floor(height * 0.7),
+                    width: Math.floor(width * 0.6),
+                    height: Math.floor(height * 0.4),
+                    direction: 'up',
+                    percent: 0.75,
+                })
+                console.log('Performed fallback swipe to scroll content')
+                await driver.pause(1000)
+            }
+
         } catch (err) {
-            console.error('Expand arrow click failed — dumping page source')
+            console.error('Expand arrow click or scroll failed — dumping page source')
             const pageSource = await driver.getPageSource()
             console.log('─────────── PAGE SOURCE AT STEP 15 (expand arrow) ───────────')
             console.log(pageSource)
