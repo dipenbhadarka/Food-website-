@@ -710,33 +710,78 @@ describe('Care Delivery - Resident Profile Clinical Observations Flow', () => {
     })
 
     it('Step 12 - Tap the more options button on the resident profile', async () => {
-        await testBot.waitUntilVisible(residentSelectors.moreOptionButton, 15000)
-        await testBot.click(residentSelectors.moreOptionButton)
-        await driver.pause(1500)
+        try {
+            await testBot.waitUntilVisible(residentSelectors.moreOptionButton, 15000)
+            await testBot.click(residentSelectors.moreOptionButton)
+            await driver.pause(1500)
+        } catch (err) {
+            console.error('More option button click failed — dumping page source')
+            const pageSource = await driver.getPageSource()
+            console.log('─────────── PAGE SOURCE AT STEP 12 (more option) ───────────')
+            console.log(pageSource)
+            console.log('───────────────────────────────────────────────────────')
+            throw err
+        }
     })
 
     it('Step 13 - Tap the Clinical tab', async () => {
-        await testBot.waitUntilVisible(residentSelectors.clinicalTab, 15000)
-        await testBot.click(residentSelectors.clinicalTab)
-        await driver.pause(1500)
+        try {
+            await testBot.waitUntilVisible(residentSelectors.clinicalTab, 15000)
+            await testBot.click(residentSelectors.clinicalTab)
+            await driver.pause(1500)
+        } catch (err) {
+            console.error('Clinical tab click failed — dumping page source')
+            const pageSource = await driver.getPageSource()
+            console.log('─────────── PAGE SOURCE AT STEP 13 (clinical tab) ───────────')
+            console.log(pageSource)
+            console.log('────────────────────────────────────────────────────────')
+            throw err
+        }
     })
 
     it('Step 14 - Tap Observations', async () => {
-        await testBot.waitUntilVisible(residentSelectors.observationsButton, 15000)
-        await testBot.click(residentSelectors.observationsButton)
-        await driver.pause(1500)
+        try {
+            await testBot.waitUntilVisible(residentSelectors.observationsButton, 15000)
+            await testBot.click(residentSelectors.observationsButton)
+            await driver.pause(1500)
+        } catch (err) {
+            console.error('Observations button click failed — dumping page source')
+            const pageSource = await driver.getPageSource()
+            console.log('─────────── PAGE SOURCE AT STEP 14 (observations) ───────────')
+            console.log(pageSource)
+            console.log('────────────────────────────────────────────────────────')
+            throw err
+        }
     })
 
     it('Step 15 - Tap the expand arrow on the observation entry', async () => {
-        await testBot.waitUntilVisible(residentSelectors.expandArrowButton, 15000)
-        await testBot.click(residentSelectors.expandArrowButton)
-        await driver.pause(1500)
+        try {
+            await testBot.waitUntilVisible(residentSelectors.expandArrowButton, 15000)
+            await testBot.click(residentSelectors.expandArrowButton)
+            await driver.pause(1500)
+        } catch (err) {
+            console.error('Expand arrow click failed — dumping page source')
+            const pageSource = await driver.getPageSource()
+            console.log('─────────── PAGE SOURCE AT STEP 15 (expand arrow) ───────────')
+            console.log(pageSource)
+            console.log('────────────────────────────────────────────────────────')
+            throw err
+        }
     })
 
     it('Step 16 - Close the resident profile via the cross/close button', async () => {
-        await testBot.waitUntilVisible(residentSelectors.closeCrossButton, 15000)
-        await testBot.click(residentSelectors.closeCrossButton)
-        await driver.pause(1000)
+        try {
+            await testBot.waitUntilVisible(residentSelectors.closeCrossButton, 15000)
+            await testBot.click(residentSelectors.closeCrossButton)
+            await driver.pause(1000)
+        } catch (err) {
+            console.error('Close button click failed — dumping page source')
+            const pageSource = await driver.getPageSource()
+            console.log('─────────── PAGE SOURCE AT STEP 16 (close button) ───────────')
+            console.log(pageSource)
+            console.log('─────────────────────────────────────────────────────────')
+            throw err
+        }
     })
 
 })
