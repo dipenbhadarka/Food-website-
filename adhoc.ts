@@ -216,7 +216,8 @@ const adhocActivitySelectors = {
         ),
     } as TestBotElement,
 
-    // Arrow to expand — first matching empty-text TextView
+    // Arrow to expand — first matching empty-text TextView.
+    // NB: This toggles open/closed on click — only tap once.
     expandArrow: {
         android: AndroidLocatorBuilder.xpath(
             '(//android.widget.TextView[@text=""])[1]'
@@ -808,7 +809,7 @@ describe('Care Delivery - Freya Farrow Adhoc Activity Flow', () => {
         }
     })
 
-    it('Step 14 - Tap arrow to expand', async () => {
+    it('Step 14 - Tap arrow to expand (toggle — tap once only)', async () => {
         try {
             await testBot.waitUntilVisible(adhocActivitySelectors.expandArrow, 15000)
             await testBot.click(adhocActivitySelectors.expandArrow)
@@ -838,13 +839,14 @@ describe('Care Delivery - Freya Farrow Adhoc Activity Flow', () => {
         }
     })
 
-    it('Step 16 - Click Next and scroll down', async () => {
+    it('Step 16 - Click Next and scroll down to see all content', async () => {
         try {
             await testBot.waitUntilVisible(adhocActivitySelectors.nextButton, 15000)
             await testBot.click(adhocActivitySelectors.nextButton)
             await driver.pause(1500)
 
-            // Scroll down to reveal duration options
+            // Scroll down to reveal duration options and
+            // any additional content below the fold
             try {
                 const { width, height } = await driver.getWindowSize()
                 await driver.execute('mobile: swipeGesture', {
