@@ -257,6 +257,11 @@ const adhocActivitySelectors = {
         ),
     } as TestBotElement,
 
+    // NB: There is a SliderField ImageView on this screen
+    // whose bounding box can overlap with this TextView,
+    // causing accidental taps on the slider instead of
+    // the "10 mins" text. Step 17 uses coordinate-based
+    // tapping on this element's exact center to avoid that.
     tenMinsOption: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.TextView[@text="10 mins"]'
@@ -870,8 +875,11 @@ describe('Care Delivery - Freya Farrow Adhoc Activity Flow', () => {
         }
     })
 
-    it('Step 17 - Scroll down and click on "10 mins"', async () => {
+    it('Step 17 - Scroll down and tap precisely on "10 mins" (avoiding slider overlap)', async () => {
         try {
+            // Confirm the duration screen title is visible first
+            await testBot.waitUntilVisible(adhocActivitySelectors.durationScreenTitle, 15000)
+
             // Scroll down to reveal the duration options
             try {
                 const { width, height } = await driver.getWindowSize()
@@ -889,11 +897,33 @@ describe('Care Delivery - Freya Farrow Adhoc Activity Flow', () => {
                 console.warn('Scroll on duration screen failed:', scrollErr)
             }
 
-            await testBot.waitUntilVisible(adhocActivitySelectors.tenMinsOption, 15000)
-            await testBot.click(adhocActivitySelectors.tenMinsOption)
+            // NB: There is a SliderField ImageView on this
+            // screen whose bounding box can overlap the
+            // "10 mins" TextView, causing Appium's default
+            // click() to accidentally hit the slider instead.
+            // We tap the TextView's exact center coordinates
+            // using a raw pointer action to avoid that.
+            const tenMinsXpath = '//android.widget.TextView[@text="10 mins"]'
+            const tenMinsEl = await $(tenMinsXpath)
+            await tenMinsEl.waitForDisplayed({ timeout: 15000 })
+
+            const location = await tenMinsEl.getLocation()
+            const size = await tenMinsEl.getSize()
+            const centerX = Math.floor(location.x + size.width / 2)
+            const centerY = Math.floor(location.y + size.height / 2)
+
+            console.log(`Tapping "10 mins" at coordinates: ${centerX}, ${centerY}`)
+
+            await driver.action('pointer', { parameters: { pointerType: 'touch' } })
+                .move({ duration: 0, x: centerX, y: centerY })
+                .down({ button: 0 })
+                .pause(100)
+                .up({ button: 0 })
+                .perform()
+
             await driver.pause(1000)
         } catch (err) {
-            console.error('10 mins option not found — dumping page source')
+            console.error('10 mins option not found or tap failed — dumping page source')
             const pageSource = await driver.getPageSource()
             console.log('─────────── PAGE SOURCE AT STEP 17 ───────────')
             console.log(pageSource)
