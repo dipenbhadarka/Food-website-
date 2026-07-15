@@ -246,6 +246,17 @@ const adhocActivitySelectors = {
         ),
     } as TestBotElement,
 
+    // Title confirming we've landed on the duration
+    // selection screen after clicking Next
+    durationScreenTitle: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.TextView[@text="How long did this care take?"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeStaticText[@name="How long did this care take?"]'
+        ),
+    } as TestBotElement,
+
     tenMinsOption: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.TextView[@text="10 mins"]'
@@ -839,14 +850,29 @@ describe('Care Delivery - Freya Farrow Adhoc Activity Flow', () => {
         }
     })
 
-    it('Step 16 - Click Next and scroll down to see all content', async () => {
+    it('Step 16 - Click Next and verify duration screen "How long did this care take?" loads', async () => {
         try {
             await testBot.waitUntilVisible(adhocActivitySelectors.nextButton, 15000)
             await testBot.click(adhocActivitySelectors.nextButton)
             await driver.pause(1500)
 
-            // Scroll down to reveal duration options and
-            // any additional content below the fold
+            // Confirm we've landed on the duration screen
+            // by checking for its title before proceeding
+            await testBot.waitUntilVisible(adhocActivitySelectors.durationScreenTitle, 15000)
+            console.log('Duration screen loaded: "How long did this care take?"')
+        } catch (err) {
+            console.error('Next button or duration screen title not found — dumping page source')
+            const pageSource = await driver.getPageSource()
+            console.log('─────────── PAGE SOURCE AT STEP 16 ───────────')
+            console.log(pageSource)
+            console.log('─────────────────────────────────────────')
+            throw err
+        }
+    })
+
+    it('Step 17 - Scroll down and click on "10 mins"', async () => {
+        try {
+            // Scroll down to reveal the duration options
             try {
                 const { width, height } = await driver.getWindowSize()
                 await driver.execute('mobile: swipeGesture', {
@@ -857,23 +883,12 @@ describe('Care Delivery - Freya Farrow Adhoc Activity Flow', () => {
                     direction: 'up',
                     percent: 0.75,
                 })
-                console.log('Scrolled down after clicking Next')
+                console.log('Scrolled down on duration screen')
                 await driver.pause(1000)
             } catch (scrollErr) {
-                console.warn('Scroll after Next failed:', scrollErr)
+                console.warn('Scroll on duration screen failed:', scrollErr)
             }
-        } catch (err) {
-            console.error('Next button not found — dumping page source')
-            const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 16 ───────────')
-            console.log(pageSource)
-            console.log('─────────────────────────────────────────')
-            throw err
-        }
-    })
 
-    it('Step 17 - Click on "10 mins"', async () => {
-        try {
             await testBot.waitUntilVisible(adhocActivitySelectors.tenMinsOption, 15000)
             await testBot.click(adhocActivitySelectors.tenMinsOption)
             await driver.pause(1000)
@@ -887,13 +902,13 @@ describe('Care Delivery - Freya Farrow Adhoc Activity Flow', () => {
         }
     })
 
-    it('Step 18 - Click Continue (Confirm button)', async () => {
+    it('Step 18 - Click Continue button at the bottom', async () => {
         try {
             await testBot.waitUntilVisible(adhocActivitySelectors.confirmButton, 15000)
             await testBot.click(adhocActivitySelectors.confirmButton)
             await driver.pause(1500)
         } catch (err) {
-            console.error('Confirm button not found — dumping page source')
+            console.error('Continue/Confirm button not found — dumping page source')
             const pageSource = await driver.getPageSource()
             console.log('─────────── PAGE SOURCE AT STEP 18 ───────────')
             console.log(pageSource)
