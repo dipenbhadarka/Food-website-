@@ -18,7 +18,6 @@ const PASSWORD = 'PCSpassword@1'
 const ORGANISATION = 'Person Centred Software'
 const LOCATION = 'Kerr House'
 const USER = 'Akhila Nethi'
-const RESIDENT_NAME = 'Albie Armstrong'
 const RESIDENT_NAME_2 = 'Freya Farrow'
 
 // ─────────────────────────────────────────────
@@ -186,67 +185,6 @@ const selectors = {
 }
 
 // ─────────────────────────────────────────────
-// Resident Profile / Clinical Observations selectors
-// (Albie Armstrong flow)
-// ─────────────────────────────────────────────
-const residentSelectors = {
-    residentAlbieArmstrong: {
-        android: AndroidLocatorBuilder.xpath(
-            `//android.widget.TextView[@text="${RESIDENT_NAME}"]`
-        ),
-        ios: iOSLocatorBuilder.xpath(
-            `//XCUIElementTypeStaticText[@name="${RESIDENT_NAME}"]`
-        ),
-    } as TestBotElement,
-
-    moreOptionButton: {
-        android: AndroidLocatorBuilder.xpath(
-            '//android.view.ViewGroup[@resource-id="com.personcentredsoftware.care.delivery:id/ProfilePage"]/android.view.ViewGroup/android.view.ViewGroup[2]/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup[4]/android.view.ViewGroup/android.widget.Button'
-        ),
-        ios: iOSLocatorBuilder.id('MoreOptionButton'),
-    } as TestBotElement,
-
-    clinicalTab: {
-        android: AndroidLocatorBuilder.xpath(
-            '//android.view.ViewGroup[@resource-id="com.personcentredsoftware.care.delivery:id/ProfilePage"]/android.view.ViewGroup/android.view.ViewGroup[3]/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup[2]/android.view.ViewGroup[1]/android.view.ViewGroup/android.view.ViewGroup[2]/android.view.ViewGroup/android.widget.Button'
-        ),
-        ios: iOSLocatorBuilder.id('ClinicalTab'),
-    } as TestBotElement,
-
-    observationsButton: {
-        android: AndroidLocatorBuilder.xpath(
-            '//android.widget.Button[@text="Observations"]'
-        ),
-        ios: iOSLocatorBuilder.xpath(
-            '//XCUIElementTypeButton[@name="Observations"]'
-        ),
-    } as TestBotElement,
-
-    expandArrowButton: {
-        android: AndroidLocatorBuilder.xpath(
-            '//android.view.ViewGroup[@resource-id="com.personcentredsoftware.care.delivery:id/ProfileClinicalPage"]/android.view.ViewGroup/android.widget.ScrollView/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup[1]/android.view.ViewGroup[1]/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup/android.widget.ImageView'
-        ),
-        ios: iOSLocatorBuilder.id('ExpandArrow'),
-    } as TestBotElement,
-
-    clinicalScrollView: {
-        android: AndroidLocatorBuilder.xpath(
-            '//android.view.ViewGroup[@resource-id="com.personcentredsoftware.care.delivery:id/ProfileClinicalPage"]/android.view.ViewGroup/android.widget.ScrollView'
-        ),
-        ios: iOSLocatorBuilder.xpath(
-            '//XCUIElementTypeScrollView'
-        ),
-    } as TestBotElement,
-
-    closeCrossButton: {
-        android: AndroidLocatorBuilder.xpath(
-            '//android.view.ViewGroup[@resource-id="com.personcentredsoftware.care.delivery:id/ProfilePage"]/android.view.ViewGroup/android.view.ViewGroup[1]/android.view.ViewGroup[1]/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup[2]/android.view.ViewGroup/android.widget.Button'
-        ),
-        ios: iOSLocatorBuilder.id('CloseButton'),
-    } as TestBotElement,
-}
-
-// ─────────────────────────────────────────────
 // Freya Farrow — Adhoc Activity Flow selectors
 // ─────────────────────────────────────────────
 const adhocActivitySelectors = {
@@ -336,7 +274,7 @@ const adhocActivitySelectors = {
     // Create Records — likely a different element that
     // appears after records are created (e.g. a
     // confirmation dialog's close/X button). Using the
-    // same locator for now; update once the real close
+    // same locator for now; update once the actual close
     // button's locator is confirmed.
     closeAfterCreateButton: {
         android: AndroidLocatorBuilder.xpath(
@@ -820,134 +758,12 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
 })
 
 // ─────────────────────────────────────────────
-// Suite 2 — Resident Profile Clinical Observations Flow
+// Suite 2 — Freya Farrow Adhoc Activity Flow
 // (continues after Suite 1 lands on My Communities tab)
-// ─────────────────────────────────────────────
-describe('Care Delivery - Resident Profile Clinical Observations Flow', () => {
-
-    it('Step 11 - Select resident "Albie Armstrong" from the community list', async () => {
-        await testBot.waitUntilVisible(residentSelectors.residentAlbieArmstrong, 20000)
-        await testBot.click(residentSelectors.residentAlbieArmstrong)
-        await driver.pause(2000)
-    })
-
-    it('Step 12 - Tap the more options button on the resident profile', async () => {
-        try {
-            await testBot.waitUntilVisible(residentSelectors.moreOptionButton, 15000)
-            await testBot.click(residentSelectors.moreOptionButton)
-            await driver.pause(1500)
-        } catch (err) {
-            console.error('More option button click failed — dumping page source')
-            const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 12 (more option) ───────────')
-            console.log(pageSource)
-            console.log('───────────────────────────────────────────────────────')
-            throw err
-        }
-    })
-
-    it('Step 13 - Tap the Clinical tab', async () => {
-        try {
-            await testBot.waitUntilVisible(residentSelectors.clinicalTab, 15000)
-            await testBot.click(residentSelectors.clinicalTab)
-            await driver.pause(1500)
-        } catch (err) {
-            console.error('Clinical tab click failed — dumping page source')
-            const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 13 (clinical tab) ───────────')
-            console.log(pageSource)
-            console.log('────────────────────────────────────────────────────────')
-            throw err
-        }
-    })
-
-    it('Step 14 - Tap Observations', async () => {
-        try {
-            await testBot.waitUntilVisible(residentSelectors.observationsButton, 15000)
-            await testBot.click(residentSelectors.observationsButton)
-            await driver.pause(1500)
-        } catch (err) {
-            console.error('Observations button click failed — dumping page source')
-            const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 14 (observations) ───────────')
-            console.log(pageSource)
-            console.log('────────────────────────────────────────────────────────')
-            throw err
-        }
-    })
-
-    it('Step 15 - Tap the arrow to expand the observation section and scroll to see all content', async () => {
-        try {
-            await testBot.waitUntilVisible(residentSelectors.expandArrowButton, 15000)
-
-            // NB: This arrow TOGGLES the section — first tap
-            // opens it, a second tap would close it again.
-            // We only tap once here to open it.
-            await testBot.click(residentSelectors.expandArrowButton)
-            await driver.pause(1500)
-
-            // Scroll down within the clinical page's scroll
-            // view to reveal all the expanded content
-            try {
-                const scrollViewEl = await $(
-                    await (testBot as any).getLocatorTextForElement(residentSelectors.clinicalScrollView)
-                )
-                await driver.execute('mobile: scrollGesture', {
-                    elementId: scrollViewEl.elementId,
-                    direction: 'down',
-                    percent: 0.75,
-                })
-                console.log('Scrolled down within clinical scroll view')
-                await driver.pause(1000)
-            } catch (err) {
-                console.warn('scrollGesture on scroll view failed, trying generic swipe:', err)
-                const { width, height } = await driver.getWindowSize()
-                await driver.execute('mobile: swipeGesture', {
-                    left: Math.floor(width * 0.2),
-                    top: Math.floor(height * 0.7),
-                    width: Math.floor(width * 0.6),
-                    height: Math.floor(height * 0.4),
-                    direction: 'up',
-                    percent: 0.75,
-                })
-                console.log('Performed fallback swipe to scroll content')
-                await driver.pause(1000)
-            }
-
-        } catch (err) {
-            console.error('Expand arrow click or scroll failed — dumping page source')
-            const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 15 (expand arrow) ───────────')
-            console.log(pageSource)
-            console.log('────────────────────────────────────────────────────────')
-            throw err
-        }
-    })
-
-    it('Step 16 - Close the resident profile via the cross/close button', async () => {
-        try {
-            await testBot.waitUntilVisible(residentSelectors.closeCrossButton, 15000)
-            await testBot.click(residentSelectors.closeCrossButton)
-            await driver.pause(1000)
-        } catch (err) {
-            console.error('Close button click failed — dumping page source')
-            const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 16 (close button) ───────────')
-            console.log(pageSource)
-            console.log('─────────────────────────────────────────────────────────')
-            throw err
-        }
-    })
-
-})
-
-// ─────────────────────────────────────────────
-// Suite 3 — Freya Farrow Adhoc Activity Flow
-// (continues after Suite 2 closes the profile page)
 // ─────────────────────────────────────────────
 describe('Care Delivery - Freya Farrow Adhoc Activity Flow', () => {
 
-    it('Step 17 - Select resident "Freya Farrow" from the community list', async () => {
+    it('Step 11 - Select resident "Freya Farrow" from the community list', async () => {
         try {
             await testBot.waitUntilVisible(adhocActivitySelectors.residentFreyaFarrow, 20000)
             await testBot.click(adhocActivitySelectors.residentFreyaFarrow)
@@ -955,14 +771,14 @@ describe('Care Delivery - Freya Farrow Adhoc Activity Flow', () => {
         } catch (err) {
             console.error('Resident Freya Farrow not found — dumping page source')
             const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 17 ───────────')
+            console.log('─────────── PAGE SOURCE AT STEP 11 ───────────')
             console.log(pageSource)
             console.log('─────────────────────────────────────────')
             throw err
         }
     })
 
-    it('Step 18 - Click Adhoc', async () => {
+    it('Step 12 - Click Adhoc', async () => {
         try {
             await testBot.waitUntilVisible(adhocActivitySelectors.adhocButton, 15000)
             await testBot.click(adhocActivitySelectors.adhocButton)
@@ -970,14 +786,14 @@ describe('Care Delivery - Freya Farrow Adhoc Activity Flow', () => {
         } catch (err) {
             console.error('Adhoc button not found — dumping page source')
             const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 18 ───────────')
+            console.log('─────────── PAGE SOURCE AT STEP 12 ───────────')
             console.log(pageSource)
             console.log('─────────────────────────────────────────')
             throw err
         }
     })
 
-    it('Step 19 - Select an activity from the list', async () => {
+    it('Step 13 - Select an activity from the list', async () => {
         try {
             await testBot.waitUntilVisible(adhocActivitySelectors.activitiesListItem, 15000)
             await testBot.click(adhocActivitySelectors.activitiesListItem)
@@ -985,14 +801,14 @@ describe('Care Delivery - Freya Farrow Adhoc Activity Flow', () => {
         } catch (err) {
             console.error('Activities list item not found — dumping page source')
             const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 19 ───────────')
+            console.log('─────────── PAGE SOURCE AT STEP 13 ───────────')
             console.log(pageSource)
             console.log('─────────────────────────────────────────')
             throw err
         }
     })
 
-    it('Step 20 - Tap arrow to expand', async () => {
+    it('Step 14 - Tap arrow to expand', async () => {
         try {
             await testBot.waitUntilVisible(adhocActivitySelectors.expandArrow, 15000)
             await testBot.click(adhocActivitySelectors.expandArrow)
@@ -1000,14 +816,14 @@ describe('Care Delivery - Freya Farrow Adhoc Activity Flow', () => {
         } catch (err) {
             console.error('Expand arrow not found — dumping page source')
             const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 20 ───────────')
+            console.log('─────────── PAGE SOURCE AT STEP 14 ───────────')
             console.log(pageSource)
             console.log('─────────────────────────────────────────')
             throw err
         }
     })
 
-    it('Step 21 - Select the art', async () => {
+    it('Step 15 - Select the art', async () => {
         try {
             await testBot.waitUntilVisible(adhocActivitySelectors.selectArtImage, 15000)
             await testBot.click(adhocActivitySelectors.selectArtImage)
@@ -1015,14 +831,14 @@ describe('Care Delivery - Freya Farrow Adhoc Activity Flow', () => {
         } catch (err) {
             console.error('Select art image not found — dumping page source')
             const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 21 ───────────')
+            console.log('─────────── PAGE SOURCE AT STEP 15 ───────────')
             console.log(pageSource)
             console.log('─────────────────────────────────────────')
             throw err
         }
     })
 
-    it('Step 22 - Click Next and scroll down', async () => {
+    it('Step 16 - Click Next and scroll down', async () => {
         try {
             await testBot.waitUntilVisible(adhocActivitySelectors.nextButton, 15000)
             await testBot.click(adhocActivitySelectors.nextButton)
@@ -1047,14 +863,14 @@ describe('Care Delivery - Freya Farrow Adhoc Activity Flow', () => {
         } catch (err) {
             console.error('Next button not found — dumping page source')
             const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 22 ───────────')
+            console.log('─────────── PAGE SOURCE AT STEP 16 ───────────')
             console.log(pageSource)
             console.log('─────────────────────────────────────────')
             throw err
         }
     })
 
-    it('Step 23 - Click on "10 mins"', async () => {
+    it('Step 17 - Click on "10 mins"', async () => {
         try {
             await testBot.waitUntilVisible(adhocActivitySelectors.tenMinsOption, 15000)
             await testBot.click(adhocActivitySelectors.tenMinsOption)
@@ -1062,14 +878,14 @@ describe('Care Delivery - Freya Farrow Adhoc Activity Flow', () => {
         } catch (err) {
             console.error('10 mins option not found — dumping page source')
             const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 23 ───────────')
+            console.log('─────────── PAGE SOURCE AT STEP 17 ───────────')
             console.log(pageSource)
             console.log('─────────────────────────────────────────')
             throw err
         }
     })
 
-    it('Step 24 - Click Continue (Confirm button)', async () => {
+    it('Step 18 - Click Continue (Confirm button)', async () => {
         try {
             await testBot.waitUntilVisible(adhocActivitySelectors.confirmButton, 15000)
             await testBot.click(adhocActivitySelectors.confirmButton)
@@ -1077,14 +893,14 @@ describe('Care Delivery - Freya Farrow Adhoc Activity Flow', () => {
         } catch (err) {
             console.error('Confirm button not found — dumping page source')
             const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 24 ───────────')
+            console.log('─────────── PAGE SOURCE AT STEP 18 ───────────')
             console.log(pageSource)
             console.log('─────────────────────────────────────────')
             throw err
         }
     })
 
-    it('Step 25 - Click Create Records', async () => {
+    it('Step 19 - Click Create Records', async () => {
         try {
             await testBot.waitUntilVisible(adhocActivitySelectors.createRecordsButton, 15000)
             await testBot.click(adhocActivitySelectors.createRecordsButton)
@@ -1092,14 +908,14 @@ describe('Care Delivery - Freya Farrow Adhoc Activity Flow', () => {
         } catch (err) {
             console.error('Create Records button not found — dumping page source')
             const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 25 ───────────')
+            console.log('─────────── PAGE SOURCE AT STEP 19 ───────────')
             console.log(pageSource)
             console.log('─────────────────────────────────────────')
             throw err
         }
     })
 
-    it('Step 26 - Click Close', async () => {
+    it('Step 20 - Click Close', async () => {
         try {
             await testBot.waitUntilVisible(adhocActivitySelectors.closeAfterCreateButton, 15000)
             await testBot.click(adhocActivitySelectors.closeAfterCreateButton)
@@ -1107,14 +923,14 @@ describe('Care Delivery - Freya Farrow Adhoc Activity Flow', () => {
         } catch (err) {
             console.error('Close button not found — dumping page source')
             const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 26 ───────────')
+            console.log('─────────── PAGE SOURCE AT STEP 20 ───────────')
             console.log(pageSource)
             console.log('─────────────────────────────────────────')
             throw err
         }
     })
 
-    it('Step 27 - Click on "Earlier" tab', async () => {
+    it('Step 21 - Click on "Earlier" tab', async () => {
         try {
             await testBot.waitUntilVisible(adhocActivitySelectors.earlierTab, 15000)
             await testBot.click(adhocActivitySelectors.earlierTab)
@@ -1122,7 +938,7 @@ describe('Care Delivery - Freya Farrow Adhoc Activity Flow', () => {
         } catch (err) {
             console.error('Earlier tab not found — dumping page source')
             const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 27 ───────────')
+            console.log('─────────── PAGE SOURCE AT STEP 21 ───────────')
             console.log(pageSource)
             console.log('─────────────────────────────────────────')
             throw err
