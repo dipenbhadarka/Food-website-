@@ -2,7 +2,6 @@ import { testBot } from '../../testbot'
 import { AndroidLocatorBuilder } from '../../TestBot/Locators/Android/AndroidLocatorBuilder'
 import { iOSLocatorBuilder } from '../../TestBot/Locators/iOS/iOSLocatorBuilder'
 import { TestBotElement } from '../../TestBot/TestBotElement'
-
 // ─────────────────────────────────────────────
 // Run mode detection — no manual file switching
 // RUN_MODE is read from .env (local or browserstack)
