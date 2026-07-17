@@ -2,6 +2,7 @@ import { testBot } from '../../testbot'
 import { AndroidLocatorBuilder } from '../../TestBot/Locators/Android/AndroidLocatorBuilder'
 import { iOSLocatorBuilder } from '../../TestBot/Locators/iOS/iOSLocatorBuilder'
 import { TestBotElement } from '../../TestBot/TestBotElement'
+
 // ─────────────────────────────────────────────
 // Run mode detection — no manual file switching
 // RUN_MODE is read from .env (local or browserstack)
@@ -256,25 +257,29 @@ const adhocActivitySelectors = {
         ),
     } as TestBotElement,
 
-    // NB: There is a SliderField ImageView on this screen
-    // whose bounding box can overlap with this TextView,
-    // causing accidental taps on the slider instead of
-    // the "10 mins" text. Step 17 uses coordinate-based
-    // tapping on this element's exact center to avoid that.
+    // NB: Confirmed via screenshot — this is a plain grid
+    // of duration buttons (1 mins, 2 mins, 5 mins, 10 mins,
+    // 15 mins, 20 mins, 30 mins, 45 mins, 60 mins, Other
+    // Durations). No slider overlaps it. "10 mins" is a
+    // simple text/button element in this grid.
     tenMinsOption: {
         android: AndroidLocatorBuilder.xpath(
-            '//android.widget.TextView[@text="10 mins"]'
+            '//android.widget.TextView[@text="10 mins"] | //android.widget.Button[@text="10 mins"]'
         ),
         ios: iOSLocatorBuilder.xpath(
-            '//XCUIElementTypeStaticText[@name="10 mins"]'
+            '//XCUIElementTypeStaticText[@name="10 mins"] | //XCUIElementTypeButton[@name="10 mins"]'
         ),
     } as TestBotElement,
 
+    // NB: Confirmed via screenshot — the button literally
+    // reads "Continue" at the bottom of the duration screen.
     confirmButton: {
         android: AndroidLocatorBuilder.xpath(
-            '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/ConfirmButton"]'
+            '//android.widget.Button[@text="Continue"]'
         ),
-        ios: iOSLocatorBuilder.id('ConfirmButton'),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeButton[@name="Continue"]'
+        ),
     } as TestBotElement,
 
     createRecordsButton: {
@@ -874,55 +879,51 @@ describe('Care Delivery - Freya Farrow Adhoc Activity Flow', () => {
         }
     })
 
-    it('Step 17 - Scroll down and tap precisely on "10 mins" (avoiding slider overlap)', async () => {
+    it('Step 17 - Scroll down and select "10 mins" duration', async () => {
         try {
-            // Confirm the duration screen title is visible first
             await testBot.waitUntilVisible(adhocActivitySelectors.durationScreenTitle, 15000)
 
-            // Scroll down to reveal the duration options
-            try {
+            const tenMinsXpath =
+                '//android.widget.TextView[@text="10 mins"] | //android.widget.Button[@text="10 mins"]'
+
+            // Scroll down incrementally (up to 5 times) until
+            // "10 mins" is displayed on screen. A single fixed
+            // swipe was not reliably revealing the full grid
+            // of duration buttons.
+            let found = false
+            for (let i = 0; i < 5; i++) {
+                const el = await $(tenMinsXpath)
+                if (await el.isExisting() && await el.isDisplayed()) {
+                    found = true
+                    break
+                }
+
                 const { width, height } = await driver.getWindowSize()
                 await driver.execute('mobile: swipeGesture', {
                     left: Math.floor(width * 0.2),
-                    top: Math.floor(height * 0.7),
+                    top: Math.floor(height * 0.6),
                     width: Math.floor(width * 0.6),
-                    height: Math.floor(height * 0.4),
+                    height: Math.floor(height * 0.3),
                     direction: 'up',
-                    percent: 0.75,
+                    percent: 0.5,
                 })
-                console.log('Scrolled down on duration screen')
-                await driver.pause(1000)
-            } catch (scrollErr) {
-                console.warn('Scroll on duration screen failed:', scrollErr)
+                await driver.pause(800)
             }
 
-            // NB: There is a SliderField ImageView on this
-            // screen whose bounding box can overlap the
-            // "10 mins" TextView, causing Appium's default
-            // click() to accidentally hit the slider instead.
-            // We tap the TextView's exact center coordinates
-            // using a raw pointer action to avoid that.
-            const tenMinsXpath = '//android.widget.TextView[@text="10 mins"]'
+            if (!found) {
+                throw new Error('"10 mins" button never became visible after scrolling')
+            }
+
+            // "10 mins" is a plain grid button (confirmed via
+            // screenshot) — no overlapping slider. Direct
+            // element click is safe here.
             const tenMinsEl = await $(tenMinsXpath)
-            await tenMinsEl.waitForDisplayed({ timeout: 15000 })
-
-            const location = await tenMinsEl.getLocation()
-            const size = await tenMinsEl.getSize()
-            const centerX = Math.floor(location.x + size.width / 2)
-            const centerY = Math.floor(location.y + size.height / 2)
-
-            console.log(`Tapping "10 mins" at coordinates: ${centerX}, ${centerY}`)
-
-            await driver.action('pointer', { parameters: { pointerType: 'touch' } })
-                .move({ duration: 0, x: centerX, y: centerY })
-                .down({ button: 0 })
-                .pause(100)
-                .up({ button: 0 })
-                .perform()
-
+            await tenMinsEl.click()
+            console.log('Clicked "10 mins" duration button')
             await driver.pause(1000)
+
         } catch (err) {
-            console.error('10 mins option not found or tap failed — dumping page source')
+            console.error('10 mins option not found or click failed — dumping page source')
             const pageSource = await driver.getPageSource()
             console.log('─────────── PAGE SOURCE AT STEP 17 ───────────')
             console.log(pageSource)
@@ -937,7 +938,7 @@ describe('Care Delivery - Freya Farrow Adhoc Activity Flow', () => {
             await testBot.click(adhocActivitySelectors.confirmButton)
             await driver.pause(1500)
         } catch (err) {
-            console.error('Continue/Confirm button not found — dumping page source')
+            console.error('Continue button not found — dumping page source')
             const pageSource = await driver.getPageSource()
             console.log('─────────── PAGE SOURCE AT STEP 18 ───────────')
             console.log(pageSource)
