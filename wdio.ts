@@ -22,14 +22,15 @@ if (fs.existsSync(envPath)) {
         ) {
             value = value.slice(1, -1);
         }
-        process.env[key] = value;
+        const alwaysFromFile = key.startsWith('BROWSERSTACK_');
+        if (alwaysFromFile || typeof process.env[key] === 'undefined' || process.env[key]?.trim() === '') {
+            process.env[key] = value;
+        }
     }
 }
 
 // ─────────────────────────────────────────────
 // Fix for Node 26 + undici v6.25
-// NB: Use require() instead of import so testbot
-// loads AFTER env vars are set above
 // ─────────────────────────────────────────────
 const { getTestBotCapabilities, getTestBotServices } = require('../testbot');
 
@@ -45,18 +46,14 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 // ─────────────────────────────────────────────
 // RUN MODE SWITCH
-// RUN_MODE=local        → your physical device
-// RUN_MODE=browserstack → BrowserStack cloud
 // ─────────────────────────────────────────────
-const isLocal = process.env.RUN_MODE === 'local';
+const runMode = (process.env.RUN_MODE || '').toLowerCase();
+const isLocal = runMode !== 'browserstack';
 
 console.log(`\n▶ RUN MODE: ${isLocal ? 'LOCAL PHYSICAL DEVICE (R5GL10H8QFT)' : 'BROWSERSTACK CLOUD'}\n`);
 
 export const config: WebdriverIO.Config = {
 
-    // ─────────────────────────────────────────
-    // Base WDIO Configuration
-    // ─────────────────────────────────────────
     framework: 'mocha',
     mochaOpts: {
         ui: 'bdd',
@@ -71,25 +68,14 @@ export const config: WebdriverIO.Config = {
     connectionRetryCount: 3,
     maxInstances: 1,
 
-    // ─────────────────────────────────────────
-    // Test specs
-    // ─────────────────────────────────────────
-    specs: ['../test/specs/enrolment.e2e.ts'],
+    specs: ['../test/specs/main.e2e.ts'],
 
-    // ─────────────────────────────────────────
-    // Connection
-    // local  → points to Appium on your machine
-    // cloud  → points to BrowserStack
-    // ─────────────────────────────────────────
-    hostname: isLocal ? '127.0.0.1'                   : 'hub.browserstack.com',
-    port:     isLocal ? 4723                           : 443,
-    path:     '/wd/hub',
-    user:     isLocal ? ''                             : process.env.BROWSERSTACK_USERNAME,
-    key:      isLocal ? ''                             : process.env.BROWSERSTACK_ACCESS_KEY,
+    hostname: isLocal ? '127.0.0.1' : 'hub.browserstack.com',
+    port:     isLocal ? 4723        : 443,
+    path:     isLocal ? '/'         : '/wd/hub',
+    user:     isLocal ? ''          : process.env.BROWSERSTACK_USERNAME,
+    key:      isLocal ? ''          : process.env.BROWSERSTACK_ACCESS_KEY,
 
-    // ─────────────────────────────────────────
-    // Reporters
-    // ─────────────────────────────────────────
     reporters: [
         [
             'spec',
@@ -99,47 +85,41 @@ export const config: WebdriverIO.Config = {
         ],
     ],
 
-    // ─────────────────────────────────────────
-    // Services
-    // local → no service needed
-    // cloud → BrowserStack service
-    // ─────────────────────────────────────────
     services: isLocal ? [] : getTestBotServices(),
-
-    // ─────────────────────────────────────────
-    // Capabilities from testbot.ts
-    // ─────────────────────────────────────────
     capabilities: getTestBotCapabilities(),
 
     // ─────────────────────────────────────────
-    // After Suite Hook
+    // DIAGNOSTIC HOOK — logs how many top-level
+    // suites Mocha actually collected before
+    // running. Compare this count against how
+    // many describe() blocks you expect (1 per
+    // suite file: enrolment + each scenario).
+    // Remove this once the issue is confirmed
+    // fixed.
     // ─────────────────────────────────────────
+    before: function (capabilities, specs) {
+        const mochaRunner = (global as any).mocha
+        console.log('═══════════ DIAGNOSTIC: SPEC FILES LOADED ═══════════')
+        console.log('Specs passed to this session:', specs)
+        console.log('═══════════════════════════════════════════════════')
+    },
+
     afterSuite: async function (suite) {
         try {
             const platform = (driver.capabilities.platformName || '').toLowerCase();
 
             if (platform === 'android') {
                 if (isLocal) {
-                    // Local device — nothing to reinstall
-                    // app is already installed on device
                     console.log('Local run complete. Skipping reinstall.')
                 } else {
-                    // BrowserStack — reinstall from bs:// app id
-                    const appId = process.env.BROWSERSTACK_APP;
-                    if (appId) {
-                        await driver.execute('mobile: removeApp', {
-                            appId: 'com.personcentredsoftware.care.delivery'
-                        });
-                        await driver.execute('mobile: installApp', { app: appId });
-                        console.log('Reinstalled Android app from BrowserStack app id.');
-                    } else {
-                        console.warn('No BROWSERSTACK_APP found in .env. Skipping reinstall.');
-                    }
+                    await driver.execute('mobile: clearApp', {
+                        appId: 'com.personcentredsoftware.care.delivery',
+                    });
+                    console.log('Cleared Android app data on BrowserStack device.');
                 }
             } else {
                 console.log('Not Android platform. Skipping cleanup.');
             }
-
         } catch (err) {
             console.error('Failed to reinstall app:', err);
         }
