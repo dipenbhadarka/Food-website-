@@ -175,6 +175,10 @@ const usernameField: TestBotElement = isLocal
     ? selectors.usernameFieldLocal
     : selectors.usernameFieldBrowserStack
 
+// NB: This EXACT-match picker uses @text="value" — an
+// exact equality XPath, not a contains() match — so it
+// will never accidentally match a similarly-worded option
+// like "NFC Test House" when looking for "Kerr House".
 function pickerOption(text: string): TestBotElement {
     return {
         android: AndroidLocatorBuilder.xpath(
@@ -273,51 +277,99 @@ async function submitUsername(): Promise<void> {
 }
 
 // ─────────────────────────────────────────────
-// Helper — robust picker selection with scroll fallback
+// Helper — robust picker selection with scroll
+// fallback. Uses EXACT text matching throughout
+// to avoid accidentally selecting a similarly
+// worded option (e.g. "NFC Test House" instead
+// of "Kerr House"). Verifies the final selected
+// value afterward and throws if it doesn't match.
 // ─────────────────────────────────────────────
 async function selectPickerOptionRobust(value: string): Promise<void> {
     const option = pickerOption(value)
+    let selected = false
 
+    // 1) Try direct visibility/click first — EXACT match
     try {
         await testBot.waitUntilVisible(option, 5000)
         await testBot.click(option)
-        console.log(`Selected "${value}" directly`)
-        return
+        console.log(`Selected "${value}" directly (exact match)`)
+        selected = true
     } catch (err) {
         console.warn(`Direct selection of "${value}" failed, trying scroll fallback`)
     }
 
+    // 2) BrowserStack fallback — scroll the list using
+    // textMatches with anchors (^...$) to force an EXACT
+    // match, not a substring/contains match. This prevents
+    // scrolling past and landing on a different option that
+    // happens to occupy the same screen position.
+    if (!selected) {
+        try {
+            const scrolled = await $(
+                'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
+                `.scrollIntoView(new UiSelector().textMatches("^${value}$"))`
+            )
+            if (await scrolled.isExisting()) {
+                await scrolled.click()
+                console.log(`Selected "${value}" via UiScrollable scroll (exact match)`)
+                selected = true
+            }
+        } catch (err) {
+            console.warn(`UiScrollable fallback for "${value}" failed:`, err)
+        }
+    }
+
+    // 3) Last resort — EXACT text match only (not contains)
+    if (!selected) {
+        try {
+            const anyText = await $(`//*[@text="${value}"]`)
+            if (await anyText.isExisting()) {
+                await anyText.click()
+                console.log(`Selected "${value}" via generic exact text match`)
+                selected = true
+            }
+        } catch (err) {
+            console.warn(`Generic exact text match for "${value}" failed:`, err)
+        }
+    }
+
+    if (!selected) {
+        console.error(`Could not select "${value}" with any method — dumping page source`)
+        const pageSource = await driver.getPageSource()
+        console.log(`─────────── PAGE SOURCE: PICKER "${value}" ───────────`)
+        console.log(pageSource)
+        console.log('─────────────────────────────────────────────')
+        throw new Error(`Could not select picker option "${value}"`)
+    }
+
+    // ── Verification: confirm the field now actually
+    // shows the value we intended to select. This catches
+    // cases where a click landed on the wrong option
+    // silently (e.g. "NFC Test House" instead of "Kerr House").
+    await driver.pause(500)
     try {
-        const scrolled = await $(
-            'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
-            `.scrollIntoView(new UiSelector().text("${value}"))`
+        const locationEl = await $(
+            '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/LocationPicker"]'
         )
-        if (await scrolled.isExisting()) {
-            await scrolled.click()
-            console.log(`Selected "${value}" via UiScrollable scroll`)
-            return
+        if (await locationEl.isExisting()) {
+            const currentText = await locationEl.getText()
+            console.log(`Field now shows: "${currentText}" (expected to contain "${value}")`)
+            if (!currentText.includes(value)) {
+                console.error(`MISMATCH: expected "${value}" but field shows "${currentText}"`)
+                throw new Error(
+                    `Picker selection mismatch — expected "${value}" but field shows "${currentText}"`
+                )
+            }
         }
-    } catch (err) {
-        console.warn(`UiScrollable fallback for "${value}" failed:`, err)
-    }
-
-    try {
-        const anyText = await $(`//*[@text="${value}"]`)
-        if (await anyText.isExisting()) {
-            await anyText.click()
-            console.log(`Selected "${value}" via generic text match`)
-            return
+    } catch (verifyErr) {
+        // Only re-throw if it's our own mismatch error;
+        // if the field simply doesn't exist on this screen
+        // (e.g. verifying Organisation, not Location), skip
+        // verification silently.
+        if (verifyErr instanceof Error && verifyErr.message.includes('Picker selection mismatch')) {
+            throw verifyErr
         }
-    } catch (err) {
-        console.warn(`Generic text match for "${value}" failed:`, err)
     }
-
-    console.error(`Could not select "${value}" with any method — dumping page source`)
-    const pageSource = await driver.getPageSource()
-    console.log(`─────────── PAGE SOURCE: PICKER "${value}" ───────────`)
-    console.log(pageSource)
-    console.log('─────────────────────────────────────────────')
-    throw new Error(`Could not select picker option "${value}"`)
 }
 
 // ─────────────────────────────────────────────
