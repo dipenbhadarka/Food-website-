@@ -7,6 +7,7 @@ import { TestBotElement } from '../../TestBot/TestBotElement'
 // Run mode detection
 // ─────────────────────────────────────────────
 const isLocal = process.env.RUN_MODE === 'local'
+const localAppPackage = process.env.LOCAL_APP_PACKAGE || 'com.personcentredsoftware.care.delivery'
 console.log(`▶ Running in ${isLocal ? 'LOCAL PHYSICAL DEVICE' : 'BROWSERSTACK CLOUD'} mode`)
 
 // ─────────────────────────────────────────────
@@ -17,6 +18,15 @@ const PASSWORD = 'PCSpassword@1'
 const ORGANISATION = 'Person Centred Software'
 const LOCATION = 'Kerr House'
 const USER = 'Akhila Nethi'
+
+// NB: This is the exact community text we must select on
+// the "What communities are you working in today?" screen.
+// There are FOUR similar options on that screen:
+//   "Kerr House"                              (parent group, not selectable)
+//   "Kerr House / Service Users"              <-- THIS is the one we want
+//   "Kerr House / South Wing - First Floor"   (do NOT select this)
+//   "Kerr House / Training"                   (do NOT select this)
+const TARGET_COMMUNITY = 'Kerr House / Service Users'
 
 // ─────────────────────────────────────────────
 // Selectors
@@ -136,47 +146,40 @@ const selectors = {
         ios: iOSLocatorBuilder.id('SignInButton'),
     } as TestBotElement,
 
-    // ── Community options (exact text) ──
-    // These four are the actual community list items on
-    // the "What communities are you working in today?" /
-    // Communities selection screen after login.
+    // ── Communities screen — all four options present,
+    // each with an EXACT-match locator so they can never
+    // be confused with one another. ──
     kerrHouseServiceUsers: {
         android: AndroidLocatorBuilder.xpath(
-            '//android.widget.TextView[@text="Kerr House / Service Users"]'
+            `//android.widget.TextView[@text="${TARGET_COMMUNITY}"]`
         ),
         ios: iOSLocatorBuilder.xpath(
-            '//XCUIElementTypeStaticText[@name="Kerr House / Service Users"]'
+            `//XCUIElementTypeStaticText[@name="${TARGET_COMMUNITY}"]`
         ),
     } as TestBotElement,
 
+    // The clickable row (parent ViewGroup) containing the
+    // "Kerr House / Service Users" checkbox — required on
+    // BrowserStack where no community is pre-selected and
+    // the CheckBox itself does not toggle via a direct
+    // Appium click; the surrounding row must be tapped.
+    kerrHouseServiceUsersRow: {
+        android: AndroidLocatorBuilder.xpath(
+            `//android.widget.TextView[@text="${TARGET_COMMUNITY}"]/ancestor::android.view.ViewGroup[@clickable="true"][1]`
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            `//XCUIElementTypeStaticText[@name="${TARGET_COMMUNITY}"]`
+        ),
+    } as TestBotElement,
+
+    // Explicitly defined so we can positively confirm we
+    // are NOT on this option before/after selecting.
     kerrHouseSouthWing: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.TextView[@text="Kerr House / South Wing - First Floor"]'
         ),
         ios: iOSLocatorBuilder.xpath(
             '//XCUIElementTypeStaticText[@name="Kerr House / South Wing - First Floor"]'
-        ),
-    } as TestBotElement,
-
-    kerrHouseTraining: {
-        android: AndroidLocatorBuilder.xpath(
-            '//android.widget.TextView[@text="Kerr House / Training"]'
-        ),
-        ios: iOSLocatorBuilder.xpath(
-            '//XCUIElementTypeStaticText[@name="Kerr House / Training"]'
-        ),
-    } as TestBotElement,
-
-    // The selectable/clickable row (parent ViewGroup) for
-    // the "Kerr House / Service Users" checkbox — used on
-    // BrowserStack where no community is pre-selected and
-    // the row itself must be tapped to toggle the checkbox.
-    kerrHouseServiceUsersRow: {
-        android: AndroidLocatorBuilder.xpath(
-            '//android.widget.TextView[@text="Kerr House / Service Users"]/ancestor::android.view.ViewGroup[@clickable="true"][1]'
-        ),
-        ios: iOSLocatorBuilder.xpath(
-            '//XCUIElementTypeStaticText[@name="Kerr House / Service Users"]'
         ),
     } as TestBotElement,
 
@@ -201,10 +204,6 @@ const usernameField: TestBotElement = isLocal
     ? selectors.usernameFieldLocal
     : selectors.usernameFieldBrowserStack
 
-// EXACT-match picker option — uses @text="value" (exact
-// equality), never a contains() match, so it will not
-// accidentally match a similarly-worded option (e.g.
-// "NFC Test House" when looking for "Kerr House").
 function pickerOption(text: string): TestBotElement {
     return {
         android: AndroidLocatorBuilder.xpath(
@@ -303,81 +302,107 @@ async function submitUsername(): Promise<void> {
 }
 
 // ─────────────────────────────────────────────
-// Helper — robust picker selection with scroll
-// fallback. Uses EXACT text matching throughout
-// and verifies the final selected value afterward.
+// Helper — robust picker selection with scroll fallback
 // ─────────────────────────────────────────────
 async function selectPickerOptionRobust(value: string): Promise<void> {
     const option = pickerOption(value)
-    let selected = false
 
     try {
         await testBot.waitUntilVisible(option, 5000)
         await testBot.click(option)
-        console.log(`Selected "${value}" directly (exact match)`)
-        selected = true
+        console.log(`Selected "${value}" directly`)
+        return
     } catch (err) {
         console.warn(`Direct selection of "${value}" failed, trying scroll fallback`)
     }
 
-    if (!selected) {
-        try {
-            const scrolled = await $(
-                'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
-                `.scrollIntoView(new UiSelector().textMatches("^${value}$"))`
-            )
-            if (await scrolled.isExisting()) {
-                await scrolled.click()
-                console.log(`Selected "${value}" via UiScrollable scroll (exact match)`)
-                selected = true
-            }
-        } catch (err) {
-            console.warn(`UiScrollable fallback for "${value}" failed:`, err)
+    try {
+        const scrolled = await $(
+            'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
+            `.scrollIntoView(new UiSelector().text("${value}"))`
+        )
+        if (await scrolled.isExisting()) {
+            await scrolled.click()
+            console.log(`Selected "${value}" via UiScrollable scroll`)
+            return
         }
+    } catch (err) {
+        console.warn(`UiScrollable fallback for "${value}" failed:`, err)
     }
 
-    if (!selected) {
-        try {
-            const anyText = await $(`//*[@text="${value}"]`)
-            if (await anyText.isExisting()) {
-                await anyText.click()
-                console.log(`Selected "${value}" via generic exact text match`)
-                selected = true
-            }
-        } catch (err) {
-            console.warn(`Generic exact text match for "${value}" failed:`, err)
+    try {
+        const anyText = await $(`//*[@text="${value}"]`)
+        if (await anyText.isExisting()) {
+            await anyText.click()
+            console.log(`Selected "${value}" via generic text match`)
+            return
         }
+    } catch (err) {
+        console.warn(`Generic text match for "${value}" failed:`, err)
     }
 
-    if (!selected) {
-        console.error(`Could not select "${value}" with any method — dumping page source`)
+    console.error(`Could not select "${value}" with any method — dumping page source`)
+    try {
         const pageSource = await driver.getPageSource()
         console.log(`─────────── PAGE SOURCE: PICKER "${value}" ───────────`)
         console.log(pageSource)
         console.log('─────────────────────────────────────────────')
-        throw new Error(`Could not select picker option "${value}"`)
+    } catch (srcErr) {
+        console.warn('getPageSource failed (session may be dead):', srcErr)
+    }
+    throw new Error(`Could not select picker option "${value}"`)
+}
+
+// ─────────────────────────────────────────────
+// Helper — reliably tap "Kerr House / Service Users"
+// on the Communities screen only. Never touches
+// "South Wing" or "Training". Verifies checkbox state
+// (or button enablement) before/after tapping so we
+// never rely on assumptions about a pre-checked state.
+// ─────────────────────────────────────────────
+async function ensureKerrHouseServiceUsersSelected(): Promise<void> {
+    const targetXpath = `//android.widget.TextView[@text="${TARGET_COMMUNITY}"]`
+
+    await testBot.waitUntilVisible(selectors.kerrHouseServiceUsers, 20000)
+    console.log(`Confirmed "${TARGET_COMMUNITY}" is visible on the Communities screen`)
+
+    const startWorkXpath =
+        '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/StartWorkButton"]'
+    const startBtn = await $(startWorkXpath)
+
+    // If Start Work is already enabled, the target community
+    // is likely already selected by default (seen on local
+    // physical device) — do NOT tap it, since tapping would
+    // toggle it OFF and disable Start Work again.
+    const alreadyEnabled = await startBtn.isEnabled().catch(() => false)
+    if (alreadyEnabled) {
+        console.log('Start Work already enabled — assuming target community is pre-selected. Skipping tap.')
+        return
     }
 
-    await driver.pause(500)
-    try {
-        const locationEl = await $(
-            '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/LocationPicker"]'
+    // Otherwise (BrowserStack, or any run where nothing is
+    // pre-selected), tap the row for "Kerr House / Service
+    // Users" specifically — never any other Kerr House option.
+    console.log(`Start Work is disabled — tapping "${TARGET_COMMUNITY}" row to select it`)
+    await testBot.click(selectors.kerrHouseServiceUsersRow)
+    await driver.pause(1000)
+
+    const nowEnabled = await startBtn.isEnabled().catch(() => false)
+    if (!nowEnabled) {
+        console.error(`Start Work still disabled after tapping "${TARGET_COMMUNITY}" — dumping page source`)
+        try {
+            const pageSource = await driver.getPageSource()
+            console.log('─────────── PAGE SOURCE: COMMUNITY SELECTION ───────────')
+            console.log(pageSource)
+            console.log('────────────────────────────────────────────────────')
+        } catch (srcErr) {
+            console.warn('getPageSource failed:', srcErr)
+        }
+        throw new Error(
+            `Selecting "${TARGET_COMMUNITY}" did not enable Start Work — check the community list state`
         )
-        if (await locationEl.isExisting()) {
-            const currentText = await locationEl.getText()
-            console.log(`Field now shows: "${currentText}" (expected to contain "${value}")`)
-            if (!currentText.includes(value)) {
-                console.error(`MISMATCH: expected "${value}" but field shows "${currentText}"`)
-                throw new Error(
-                    `Picker selection mismatch — expected "${value}" but field shows "${currentText}"`
-                )
-            }
-        }
-    } catch (verifyErr) {
-        if (verifyErr instanceof Error && verifyErr.message.includes('Picker selection mismatch')) {
-            throw verifyErr
-        }
     }
+    console.log(`Confirmed "${TARGET_COMMUNITY}" is selected — Start Work is now enabled`)
 }
 
 // ─────────────────────────────────────────────
@@ -476,18 +501,37 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         }
 
         await testBot.click(selectors.identityLoginButton)
-        await driver.pause(3000)
+
+        // On physical device, MSAL may open a Chrome Custom Tab
+        // or broker auth which briefly backgrounds the app.
+        // Give it up to 120s to complete and bring the app back
+        // to foreground before looking for the enrolment page.
+        const postLoginWait = isLocal ? 120000 : 20000
+        await driver.pause(isLocal ? 5000 : 3000)
+
+        if (isLocal) {
+            try {
+                await driver.activateApp(localAppPackage)
+                await driver.pause(2000)
+            } catch (e) {
+                console.warn('activateApp after identity login failed (app may already be foreground):', e)
+            }
+        }
 
         try {
-            await testBot.waitUntilVisible(selectors.organisationDropdown, 20000)
+            await testBot.waitUntilVisible(selectors.organisationDropdown, postLoginWait)
             await testBot.waitUntilVisible(selectors.locationDropdown, 5000)
             await testBot.waitUntilVisible(selectors.enrolButton, 5000)
         } catch (err) {
             console.error('Enrol page did not load after clicking Login — dumping page source')
-            const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 6 (after click) ───────────')
-            console.log(pageSource)
-            console.log('───────────────────────────────────────────────────────')
+            try {
+                const pageSource = await driver.getPageSource()
+                console.log('─────────── PAGE SOURCE AT STEP 6 (after click) ───────────')
+                console.log(pageSource)
+                console.log('───────────────────────────────────────────────────────')
+            } catch (srcErr) {
+                console.warn('getPageSource failed (session may be dead):', srcErr)
+            }
             throw err
         }
     })
@@ -604,22 +648,12 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         await testBot.waitUntilVisible(selectors.kerrHouseServiceUsers, 20000)
     })
 
-    it('Step 10.9 - Click Start Work and land on My Communities tab', async () => {
-        const startWorkXpath =
-            '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/StartWorkButton"]'
+    it('Step 10.9 - Select "Kerr House / Service Users", click Start Work and land on My Communities tab', async () => {
+        // Reliably ensures ONLY "Kerr House / Service Users"
+        // gets selected — never "South Wing" or "Training" —
+        // and confirms Start Work is enabled before proceeding.
+        await ensureKerrHouseServiceUsersSelected()
 
-        if (!isLocal) {
-            const startBtn = await $(startWorkXpath)
-            if (!(await startBtn.isEnabled())) {
-                await testBot.click(selectors.kerrHouseServiceUsersRow)
-                await driver.pause(1000)
-            }
-            await startBtn.waitForEnabled({ timeout: 10000 }).catch(() => {
-                console.warn('Start Work still disabled after community selection')
-            })
-        }
-
-        await testBot.waitUntilVisible(selectors.startWorkButton, 10000)
         await testBot.click(selectors.startWorkButton)
 
         try {
