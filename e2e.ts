@@ -136,6 +136,10 @@ const selectors = {
         ios: iOSLocatorBuilder.id('SignInButton'),
     } as TestBotElement,
 
+    // ── Community options (exact text) ──
+    // These four are the actual community list items on
+    // the "What communities are you working in today?" /
+    // Communities selection screen after login.
     kerrHouseServiceUsers: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.TextView[@text="Kerr House / Service Users"]'
@@ -145,6 +149,28 @@ const selectors = {
         ),
     } as TestBotElement,
 
+    kerrHouseSouthWing: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.TextView[@text="Kerr House / South Wing - First Floor"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeStaticText[@name="Kerr House / South Wing - First Floor"]'
+        ),
+    } as TestBotElement,
+
+    kerrHouseTraining: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.TextView[@text="Kerr House / Training"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeStaticText[@name="Kerr House / Training"]'
+        ),
+    } as TestBotElement,
+
+    // The selectable/clickable row (parent ViewGroup) for
+    // the "Kerr House / Service Users" checkbox — used on
+    // BrowserStack where no community is pre-selected and
+    // the row itself must be tapped to toggle the checkbox.
     kerrHouseServiceUsersRow: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.TextView[@text="Kerr House / Service Users"]/ancestor::android.view.ViewGroup[@clickable="true"][1]'
@@ -175,10 +201,10 @@ const usernameField: TestBotElement = isLocal
     ? selectors.usernameFieldLocal
     : selectors.usernameFieldBrowserStack
 
-// NB: This EXACT-match picker uses @text="value" — an
-// exact equality XPath, not a contains() match — so it
-// will never accidentally match a similarly-worded option
-// like "NFC Test House" when looking for "Kerr House".
+// EXACT-match picker option — uses @text="value" (exact
+// equality), never a contains() match, so it will not
+// accidentally match a similarly-worded option (e.g.
+// "NFC Test House" when looking for "Kerr House").
 function pickerOption(text: string): TestBotElement {
     return {
         android: AndroidLocatorBuilder.xpath(
@@ -279,16 +305,12 @@ async function submitUsername(): Promise<void> {
 // ─────────────────────────────────────────────
 // Helper — robust picker selection with scroll
 // fallback. Uses EXACT text matching throughout
-// to avoid accidentally selecting a similarly
-// worded option (e.g. "NFC Test House" instead
-// of "Kerr House"). Verifies the final selected
-// value afterward and throws if it doesn't match.
+// and verifies the final selected value afterward.
 // ─────────────────────────────────────────────
 async function selectPickerOptionRobust(value: string): Promise<void> {
     const option = pickerOption(value)
     let selected = false
 
-    // 1) Try direct visibility/click first — EXACT match
     try {
         await testBot.waitUntilVisible(option, 5000)
         await testBot.click(option)
@@ -298,11 +320,6 @@ async function selectPickerOptionRobust(value: string): Promise<void> {
         console.warn(`Direct selection of "${value}" failed, trying scroll fallback`)
     }
 
-    // 2) BrowserStack fallback — scroll the list using
-    // textMatches with anchors (^...$) to force an EXACT
-    // match, not a substring/contains match. This prevents
-    // scrolling past and landing on a different option that
-    // happens to occupy the same screen position.
     if (!selected) {
         try {
             const scrolled = await $(
@@ -319,7 +336,6 @@ async function selectPickerOptionRobust(value: string): Promise<void> {
         }
     }
 
-    // 3) Last resort — EXACT text match only (not contains)
     if (!selected) {
         try {
             const anyText = await $(`//*[@text="${value}"]`)
@@ -342,10 +358,6 @@ async function selectPickerOptionRobust(value: string): Promise<void> {
         throw new Error(`Could not select picker option "${value}"`)
     }
 
-    // ── Verification: confirm the field now actually
-    // shows the value we intended to select. This catches
-    // cases where a click landed on the wrong option
-    // silently (e.g. "NFC Test House" instead of "Kerr House").
     await driver.pause(500)
     try {
         const locationEl = await $(
@@ -362,10 +374,6 @@ async function selectPickerOptionRobust(value: string): Promise<void> {
             }
         }
     } catch (verifyErr) {
-        // Only re-throw if it's our own mismatch error;
-        // if the field simply doesn't exist on this screen
-        // (e.g. verifying Organisation, not Location), skip
-        // verification silently.
         if (verifyErr instanceof Error && verifyErr.message.includes('Picker selection mismatch')) {
             throw verifyErr
         }
