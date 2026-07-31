@@ -6,6 +6,47 @@ import { TestBotElement } from '../../TestBot/TestBotElement'
 const RESIDENT_NAME_2 = 'Freya Farrow'
 
 // ─────────────────────────────────────────────
+// Community selection selectors (confirmed exact
+// locators) — used if this flow needs to (re)select
+// a community before choosing a resident.
+// ─────────────────────────────────────────────
+const communitySelectors = {
+    kerrHouseServiceUsers: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.TextView[@text="Kerr House / Service Users"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeStaticText[@name="Kerr House / Service Users"]'
+        ),
+    } as TestBotElement,
+
+    kerrHouseSouthWing: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.TextView[@text="Kerr House / South Wing - First Floor"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeStaticText[@name="Kerr House / South Wing - First Floor"]'
+        ),
+    } as TestBotElement,
+
+    kerrHouseTraining: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.TextView[@text="Kerr House / Training"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeStaticText[@name="Kerr House / Training"]'
+        ),
+    } as TestBotElement,
+
+    startWorkButton: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/StartWorkButton"]'
+        ),
+        ios: iOSLocatorBuilder.id('StartWorkButton'),
+    } as TestBotElement,
+}
+
+// ─────────────────────────────────────────────
 // Freya Farrow — Adhoc Activity Flow selectors
 // ─────────────────────────────────────────────
 const adhocActivitySelectors = {
@@ -72,8 +113,8 @@ const adhocActivitySelectors = {
         ),
     } as TestBotElement,
 
-    // NB: Confirmed via screenshot — this is a plain grid
-    // of duration buttons. No slider overlaps it.
+    // Confirmed via screenshot — plain grid button, no
+    // slider overlap.
     tenMinsOption: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.TextView[@text="10 mins"] | //android.widget.Button[@text="10 mins"]'
@@ -83,8 +124,8 @@ const adhocActivitySelectors = {
         ),
     } as TestBotElement,
 
-    // NB: Confirmed via screenshot — button literally
-    // reads "Continue" at the bottom of the duration screen.
+    // Confirmed via screenshot — button literally reads
+    // "Continue" at the bottom of the duration screen.
     confirmButton: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.Button[@text="Continue"]'
