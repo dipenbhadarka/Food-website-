@@ -10,9 +10,12 @@ import { TestBotElement } from '../../TestBot/TestBotElement'
 // enrolment suite that runs before this file)
 // through to Logout.
 //
-// Option B: the Close (X) icon and the Sign Out
-// control are TWO SEPARATE elements on the "Just
-// Finishing Up" screen, not one dual-purpose icon.
+// CONFIRMED locators (from a real run's log):
+//   - Sign Out button: //android.widget.Button[@text="Sign Out"]
+// The Close (X) button locator previously provided
+// returned an empty result on a real run, so it is
+// treated as unconfirmed below and searched via a
+// candidate list instead.
 // ─────────────────────────────────────────────
 const finishSignOutSelectors = {
     globalNavMenuButton: {
@@ -29,14 +32,14 @@ const finishSignOutSelectors = {
         ios: iOSLocatorBuilder.id('FinishWorkButton'),
     } as TestBotElement,
 
-    // Close (X) icon — dismisses the "Just Finishing Up"
-    // screen and returns to the app without signing out.
-    // This is the ImageView locator you confirmed.
-    closeXButton: {
+    // CONFIRMED — found successfully in a real run's log.
+    signOutButton: {
         android: AndroidLocatorBuilder.xpath(
-            '//androidx.recyclerview.widget.RecyclerView/android.widget.FrameLayout/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup[3]/android.widget.ScrollView/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup[1]/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup/android.widget.ImageView'
+            '//android.widget.Button[@text="Sign Out"]'
         ),
-        ios: iOSLocatorBuilder.id('CloseButton'),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeButton[@name="Sign Out"]'
+        ),
     } as TestBotElement,
 
     // "Just Finishing Up" screen title, used to confirm
@@ -60,44 +63,43 @@ const finishSignOutSelectors = {
 }
 
 // ─────────────────────────────────────────────
-// NB: The real Sign Out button locator has NOT
-// yet been confirmed as a separate element from
-// the close icon. This tries several likely
-// candidates and reports which one (if any)
-// actually matched on screen, so the correct one
-// can be locked in permanently once known.
+// Close (X) button — NOT yet confirmed. The
+// previously provided ImageView XPath returned
+// an EMPTY result on a real device run, so it is
+// wrong. Trying several likely candidates instead
+// and reporting which one (if any) matches.
 // ─────────────────────────────────────────────
-const signOutButtonCandidates: string[] = [
-    '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/SignOutButton"]',
-    '//android.widget.Button[@text="Sign Out"]',
-    '//android.widget.Button[@text="Sign out"]',
-    '//android.widget.Button[@text="Signout"]',
-    '//android.widget.Button[contains(@text,"Sign Out")]',
-    '//android.widget.Button[contains(@text,"Sign out")]',
-    '//android.widget.TextView[@text="Sign Out"]',
+const closeButtonCandidates: string[] = [
+    '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/CloseButton"]',
+    '//android.widget.ImageView[@resource-id="com.personcentredsoftware.care.delivery:id/CloseButton"]',
+    '//android.widget.Button[@content-desc="Close"]',
+    '//android.widget.ImageView[@content-desc="Close"]',
+    '//android.widget.Button[@text="Close"]',
+    '//android.widget.Button[@text="Cancel"]',
+    '//android.widget.ImageButton[@content-desc="Close"]',
 ]
 
-async function findSignOutButton() {
-    for (const xpath of signOutButtonCandidates) {
+async function findCloseButton() {
+    for (const xpath of closeButtonCandidates) {
         const el = await $(xpath)
         if (await el.isExisting()) {
-            console.log(`✓ Found Sign Out button using: ${xpath}`)
+            console.log(`✓ Found Close button using: ${xpath}`)
             return el
         }
     }
-    console.error('✖ Sign Out button not found with any candidate locator — dumping page source')
+    console.error('✖ Close button not found with any candidate locator — dumping page source')
     try {
         const pageSource = await driver.getPageSource()
-        console.log('─────────── PAGE SOURCE: SIGN OUT BUTTON NOT FOUND ───────────')
+        console.log('─────────── PAGE SOURCE: CLOSE BUTTON NOT FOUND ───────────')
         console.log(pageSource)
-        console.log('────────────────────────────────────────────────────────────')
+        console.log('────────────────────────────────────────────────────────')
     } catch (srcErr) {
         console.warn('getPageSource failed:', srcErr)
     }
     throw new Error(
-        'Sign Out button not found with any candidate locator. ' +
+        'Close (X) button not found with any candidate locator. ' +
         'Please inspect the "Just Finishing Up" screen with Appium Inspector ' +
-        'and provide the real resource-id or text for the Sign Out control.'
+        'and provide the real resource-id, content-desc, or text for the close control.'
     )
 }
 
@@ -139,9 +141,10 @@ describe('Care Delivery - Finish and Sign Out Flow', () => {
             await testBot.waitUntilVisible(finishSignOutSelectors.justFinishingUpTitle, 15000)
             console.log('Landed on "Just Finishing Up" screen')
 
-            // No care notes were completed, so Sign Out
-            // should be enabled immediately (nothing to upload).
-            const signOutBtn = await findSignOutButton()
+            await testBot.waitUntilVisible(finishSignOutSelectors.signOutButton, 10000)
+            const signOutBtn = await $(
+                await (testBot as any).getLocatorTextForElement(finishSignOutSelectors.signOutButton)
+            )
             const isEnabled = await signOutBtn.isEnabled()
             expect(isEnabled).toBe(true)
             console.log('Sign Out button is enabled as expected (no pending uploads)')
@@ -163,8 +166,8 @@ describe('Care Delivery - Finish and Sign Out Flow', () => {
     // ── Step 3: Close via X icon ──
     it('Step 3 - Close the Just Finishing Up screen using the X icon; return to app', async () => {
         try {
-            await testBot.waitUntilVisible(finishSignOutSelectors.closeXButton, 10000)
-            await testBot.click(finishSignOutSelectors.closeXButton)
+            const closeBtn = await findCloseButton()
+            await closeBtn.click()
             await driver.pause(1500)
 
             const stillOnFinishingUp = await testBot.isVisible(finishSignOutSelectors.justFinishingUpTitle)
@@ -189,18 +192,18 @@ describe('Care Delivery - Finish and Sign Out Flow', () => {
     it('Step 4 - From Just Finishing Up screen, click Sign Out; land on Log In screen', async () => {
         try {
             // Re-open the flow since Step 3 closed it
+            await testBot.waitUntilVisible(finishSignOutSelectors.globalNavMenuButton, 15000)
             await testBot.click(finishSignOutSelectors.globalNavMenuButton)
             await driver.pause(1000)
+
+            await testBot.waitUntilVisible(finishSignOutSelectors.finishAndSignOutButton, 10000)
             await testBot.click(finishSignOutSelectors.finishAndSignOutButton)
             await driver.pause(1500)
 
             await testBot.waitUntilVisible(finishSignOutSelectors.justFinishingUpTitle, 15000)
 
-            const signOutBtn = await findSignOutButton()
-            const isEnabledBeforeClick = await signOutBtn.isEnabled()
-            expect(isEnabledBeforeClick).toBe(true)
-
-            await signOutBtn.click()
+            await testBot.waitUntilVisible(finishSignOutSelectors.signOutButton, 10000)
+            await testBot.click(finishSignOutSelectors.signOutButton)
             await driver.pause(2000)
 
             // Verify landed on Log In screen — this also
