@@ -4,18 +4,161 @@ import { iOSLocatorBuilder } from '../../TestBot/Locators/iOS/iOSLocatorBuilder'
 import { TestBotElement } from '../../TestBot/TestBotElement'
 
 // ─────────────────────────────────────────────
-// Finish and Sign Out Flow — selectors
-// Starts from the My Communities page (assumes
-// the person is already logged in via the
-// enrolment suite that runs before this file)
-// through to Logout.
-//
+// This file is SELF-CONTAINED — it logs in first
+// (assuming the device is already enrolled from a
+// prior run of enrolment.e2e.ts), then runs the
+// Finish and Sign Out flow. This lets it run
+// standalone with:
+//   npx wdio run ./config/wdio.conf.ts --spec ./test/specs/signout.ts
+// without depending on the app already being in
+// any particular state beforehand.
+// ─────────────────────────────────────────────
+
+const isLocal = process.env.RUN_MODE === 'local'
+console.log(`▶ Running in ${isLocal ? 'LOCAL PHYSICAL DEVICE' : 'BROWSERSTACK CLOUD'} mode`)
+
+// ─────────────────────────────────────────────
+// Test Data
+// ─────────────────────────────────────────────
+const PASSWORD = 'PCSpassword@1'
+const LOCATION = 'Kerr House'
+const USER = 'Akhila Nethi'
+const TARGET_COMMUNITY = 'Kerr House / Service Users'
+
+// ─────────────────────────────────────────────
+// Login selectors (device already enrolled)
+// ─────────────────────────────────────────────
+const loginSelectors = {
+    locationPickerLogin: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/LocationPicker"]'
+        ),
+        ios: iOSLocatorBuilder.id('LocationPicker'),
+    } as TestBotElement,
+
+    userDropdown: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/UserPicker"]'
+        ),
+        ios: iOSLocatorBuilder.id('UserPicker'),
+    } as TestBotElement,
+
+    signInButton: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/SignInButton"]'
+        ),
+        ios: iOSLocatorBuilder.id('SignInButton'),
+    } as TestBotElement,
+
+    continueButton: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.Button[@resource-id="ContinueButton"]'
+        ),
+        ios: iOSLocatorBuilder.id('ContinueButton'),
+    } as TestBotElement,
+
+    passwordField: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.EditText[@resource-id="Password"]'
+        ),
+        ios: iOSLocatorBuilder.id('Password'),
+    } as TestBotElement,
+
+    identityLoginButton: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.Button[@resource-id="LoginButton"]'
+        ),
+        ios: iOSLocatorBuilder.id('LoginButton'),
+    } as TestBotElement,
+
+    kerrHouseServiceUsers: {
+        android: AndroidLocatorBuilder.xpath(
+            `//android.widget.TextView[@text="${TARGET_COMMUNITY}"]`
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            `//XCUIElementTypeStaticText[@name="${TARGET_COMMUNITY}"]`
+        ),
+    } as TestBotElement,
+
+    kerrHouseServiceUsersRow: {
+        android: AndroidLocatorBuilder.xpath(
+            `//android.widget.TextView[@text="${TARGET_COMMUNITY}"]/ancestor::android.view.ViewGroup[@clickable="true"][1]`
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            `//XCUIElementTypeStaticText[@name="${TARGET_COMMUNITY}"]`
+        ),
+    } as TestBotElement,
+
+    startWorkButton: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/StartWorkButton"]'
+        ),
+        ios: iOSLocatorBuilder.id('StartWorkButton'),
+    } as TestBotElement,
+
+    myCommunitiesTab: {
+        android: AndroidLocatorBuilder.xpath(
+            '//*[@text="My Communities"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeStaticText[@name="My Communities"]'
+        ),
+    } as TestBotElement,
+}
+
+function pickerOption(text: string): TestBotElement {
+    return {
+        android: AndroidLocatorBuilder.xpath(
+            `//android.widget.TextView[@resource-id="android:id/text1" and @text="${text}"]`
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            `//XCUIElementTypePickerWheel[@value="${text}"]`
+        ),
+    } as TestBotElement
+}
+
+async function selectPickerOptionRobust(value: string): Promise<void> {
+    const option = pickerOption(value)
+
+    try {
+        await testBot.waitUntilVisible(option, 5000)
+        await testBot.click(option)
+        console.log(`Selected "${value}" directly`)
+        return
+    } catch (err) {
+        console.warn(`Direct selection of "${value}" failed, trying scroll fallback`)
+    }
+
+    try {
+        const scrolled = await $(
+            'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
+            `.scrollIntoView(new UiSelector().textMatches("^${value}$"))`
+        )
+        if (await scrolled.isExisting()) {
+            await scrolled.click()
+            console.log(`Selected "${value}" via UiScrollable scroll (exact match)`)
+            return
+        }
+    } catch (err) {
+        console.warn(`UiScrollable fallback for "${value}" failed:`, err)
+    }
+
+    console.error(`Could not select "${value}" — dumping page source`)
+    try {
+        const pageSource = await driver.getPageSource()
+        console.log(`─────────── PAGE SOURCE: PICKER "${value}" ───────────`)
+        console.log(pageSource)
+        console.log('─────────────────────────────────────────────')
+    } catch (srcErr) {
+        console.warn('getPageSource failed:', srcErr)
+    }
+    throw new Error(`Could not select picker option "${value}"`)
+}
+
+// ─────────────────────────────────────────────
+// Finish and Sign Out selectors
 // CONFIRMED locators (from a real run's log):
 //   - Sign Out button: //android.widget.Button[@text="Sign Out"]
-// The Close (X) button locator previously provided
-// returned an empty result on a real run, so it is
-// treated as unconfirmed below and searched via a
-// candidate list instead.
 // ─────────────────────────────────────────────
 const finishSignOutSelectors = {
     globalNavMenuButton: {
@@ -32,7 +175,6 @@ const finishSignOutSelectors = {
         ios: iOSLocatorBuilder.id('FinishWorkButton'),
     } as TestBotElement,
 
-    // CONFIRMED — found successfully in a real run's log.
     signOutButton: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.Button[@text="Sign Out"]'
@@ -42,8 +184,6 @@ const finishSignOutSelectors = {
         ),
     } as TestBotElement,
 
-    // "Just Finishing Up" screen title, used to confirm
-    // navigation landed correctly
     justFinishingUpTitle: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.TextView[@text="Just Finishing Up"]'
@@ -53,7 +193,6 @@ const finishSignOutSelectors = {
         ),
     } as TestBotElement,
 
-    // Log In screen confirmation after sign out
     userDropdownAfterSignOut: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/UserPicker"]'
@@ -62,13 +201,7 @@ const finishSignOutSelectors = {
     } as TestBotElement,
 }
 
-// ─────────────────────────────────────────────
-// Close (X) button — NOT yet confirmed. The
-// previously provided ImageView XPath returned
-// an EMPTY result on a real device run, so it is
-// wrong. Trying several likely candidates instead
-// and reporting which one (if any) matches.
-// ─────────────────────────────────────────────
+// Close (X) button — not yet confirmed, try candidates
 const closeButtonCandidates: string[] = [
     '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/CloseButton"]',
     '//android.widget.ImageView[@resource-id="com.personcentredsoftware.care.delivery:id/CloseButton"]',
@@ -98,16 +231,97 @@ async function findCloseButton() {
     }
     throw new Error(
         'Close (X) button not found with any candidate locator. ' +
-        'Please inspect the "Just Finishing Up" screen with Appium Inspector ' +
-        'and provide the real resource-id, content-desc, or text for the close control.'
+        'Please inspect the "Just Finishing Up" screen with Appium Inspector.'
     )
 }
 
 // ─────────────────────────────────────────────
-// Suite — Finish and Sign Out Flow
-// (Community page → Logout only)
+// Suite — Log In then Finish and Sign Out Flow
+// (Self-contained: works standalone)
 // ─────────────────────────────────────────────
-describe('Care Delivery - Finish and Sign Out Flow', () => {
+describe('Care Delivery - Log In then Finish and Sign Out Flow', () => {
+
+    // ── Step 0: Log in (device assumed already enrolled) ──
+    it('Step 0 - Log in to reach the Communities page', async () => {
+        try {
+            await driver.pause(3000)
+
+            await testBot.waitUntilVisible(loginSelectors.locationPickerLogin, 15000)
+            const locationEl = await $(
+                '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/LocationPicker"]'
+            )
+            let locationValue = await locationEl.getText()
+
+            if (!locationValue.includes(LOCATION)) {
+                await testBot.click(loginSelectors.locationPickerLogin)
+                await driver.pause(1000)
+                await selectPickerOptionRobust(LOCATION)
+                await driver.pause(1000)
+            }
+
+            await testBot.click(loginSelectors.userDropdown)
+            await driver.pause(1000)
+            await selectPickerOptionRobust(USER)
+            await driver.pause(1000)
+
+            await testBot.waitUntilVisible(loginSelectors.signInButton, 10000)
+            await testBot.click(loginSelectors.signInButton)
+            await driver.pause(3000)
+
+            await testBot.waitUntilVisible(loginSelectors.continueButton, 20000)
+            await testBot.click(loginSelectors.continueButton)
+            await driver.pause(2000)
+
+            await testBot.waitUntilVisible(loginSelectors.passwordField, 20000)
+            await testBot.click(loginSelectors.passwordField)
+            await driver.pause(500)
+            await testBot.enterText(loginSelectors.passwordField, PASSWORD, false)
+            await driver.pause(500)
+
+            try {
+                await driver.hideKeyboard()
+                await driver.pause(1000)
+            } catch (err) {
+                console.warn('hideKeyboard failed or already hidden:', err)
+            }
+
+            await testBot.waitUntilVisible(loginSelectors.identityLoginButton, 10000)
+            await testBot.click(loginSelectors.identityLoginButton)
+            await driver.pause(3000)
+
+            await testBot.waitUntilVisible(loginSelectors.kerrHouseServiceUsers, 20000)
+
+            const startWorkXpath =
+                '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/StartWorkButton"]'
+            const startBtn = await $(startWorkXpath)
+            const alreadyEnabled = await startBtn.isEnabled().catch(() => false)
+
+            if (!alreadyEnabled) {
+                await testBot.click(loginSelectors.kerrHouseServiceUsersRow)
+                await driver.pause(1000)
+                await startBtn.waitForEnabled({ timeout: 10000 }).catch(() => {
+                    console.warn('Start Work still disabled after community selection')
+                })
+            }
+
+            await testBot.click(loginSelectors.startWorkButton)
+
+            await testBot.waitUntilVisible(loginSelectors.myCommunitiesTab, 30000)
+            console.log('Logged in successfully — landed on My Communities tab')
+
+        } catch (err) {
+            console.error('Login flow failed — dumping page source')
+            try {
+                const pageSource = await driver.getPageSource()
+                console.log('─────────── PAGE SOURCE AT STEP 0 (LOGIN) ───────────')
+                console.log(pageSource)
+                console.log('────────────────────────────────────────────────────')
+            } catch (srcErr) {
+                console.warn('getPageSource failed:', srcErr)
+            }
+            throw err
+        }
+    })
 
     // ── Step 1: Open global nav menu without completing any care notes ──
     it('Step 1 - Without completing any care notes, open the global nav menu', async () => {
@@ -191,7 +405,6 @@ describe('Care Delivery - Finish and Sign Out Flow', () => {
     // ── Step 4: Re-open Finishing Up screen and Sign Out ──
     it('Step 4 - From Just Finishing Up screen, click Sign Out; land on Log In screen', async () => {
         try {
-            // Re-open the flow since Step 3 closed it
             await testBot.waitUntilVisible(finishSignOutSelectors.globalNavMenuButton, 15000)
             await testBot.click(finishSignOutSelectors.globalNavMenuButton)
             await driver.pause(1000)
@@ -206,10 +419,6 @@ describe('Care Delivery - Finish and Sign Out Flow', () => {
             await testBot.click(finishSignOutSelectors.signOutButton)
             await driver.pause(2000)
 
-            // Verify landed on Log In screen — this also
-            // confirms the device is still enrolled (if it
-            // were un-enrolled, we would land on the
-            // Welcome/enrolment screen instead, not Log In)
             await testBot.waitUntilVisible(finishSignOutSelectors.userDropdownAfterSignOut, 15000)
             console.log('Signed out successfully — landed on Log In screen; device remains enrolled')
 
