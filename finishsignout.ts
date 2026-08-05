@@ -692,11 +692,50 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
 
         await testBot.waitUntilVisible(selectors.identityLoginButton, 10000)
         await testBot.click(selectors.identityLoginButton)
-        await driver.pause(3000)
+
+        // NB: On physical device, MSAL/identity login can
+        // briefly background the app (Chrome Custom Tab or
+        // system auth dialog), same as during enrolment
+        // Step 6. Without bringing the app back to
+        // foreground here, the Appium session can go stale
+        // waiting on a backgrounded app, eventually causing
+        // "invalid session id" errors on every step after
+        // this one. Mirror the same recovery logic used in
+        // Step 6.
+        const postLoginWait = isLocal ? 120000 : 20000
+        await driver.pause(isLocal ? 5000 : 3000)
+
+        if (isLocal) {
+            try {
+                await driver.activateApp(localAppPackage)
+                await driver.pause(2000)
+            } catch (e) {
+                console.warn('activateApp after login failed (app may already be foreground):', e)
+            }
+        }
+
+        try {
+            await testBot.waitUntilVisible(selectors.kerrHouseServiceUsers, postLoginWait)
+        } catch (err) {
+            console.error('Communities page did not load after Login — dumping page source')
+            try {
+                const pageSource = await driver.getPageSource()
+                console.log('─────────── PAGE SOURCE AT STEP 10.7 (after click) ───────────')
+                console.log(pageSource)
+                console.log('───────────────────────────────────────────────────────────')
+            } catch (srcErr) {
+                console.warn('getPageSource failed (session may be dead):', srcErr)
+            }
+            throw err
+        }
     })
 
     it('Step 10.8 - User is taken to Select Communities page', async () => {
-        await testBot.waitUntilVisible(selectors.kerrHouseServiceUsers, 20000)
+        // Communities page visibility is already confirmed
+        // by Step 10.7's recovery wait above — this step
+        // just re-confirms it explicitly for clarity in the
+        // test report.
+        await testBot.waitUntilVisible(selectors.kerrHouseServiceUsers, 10000)
     })
 
     it('Step 10.9 - Select "Kerr House / Service Users", click Start Work and land on My Communities tab', async () => {
@@ -851,6 +890,31 @@ async function findCloseButtonOrNull() {
 // (Community page → Logout only)
 // ─────────────────────────────────────────────
 describe('Care Delivery - Finish and Sign Out Flow', () => {
+
+    // ── Step 0: Confirm the Appium session is still alive ──
+    // Guards against the whole suite failing with a wall of
+    // "invalid session id" retries if the previous suite's
+    // session died (e.g. app was backgrounded during login
+    // and never came back to foreground). If the session is
+    // dead, this fails fast with ONE clear error instead of
+    // every subsequent step retrying against a dead session.
+    it('Step 0 - Confirm Appium session is alive before starting Sign Out flow', async () => {
+        try {
+            const isAppInForeground = await driver.getPageSource()
+            if (!isAppInForeground) {
+                throw new Error('getPageSource returned empty — session may not be usable')
+            }
+            console.log('Session confirmed alive — proceeding with Sign Out flow')
+        } catch (err) {
+            console.error(
+                '✖ Appium session appears dead at the start of the Sign Out suite. ' +
+                'This usually means the app was backgrounded (e.g. during MSAL login in ' +
+                'the previous suite) and never returned to foreground. ' +
+                'Check Step 10.7 of the Enrolment & Login suite in the log above.'
+            )
+            throw err
+        }
+    })
 
     // ── Step 1: Open global nav menu without completing any care notes ──
     it('Step 1 - Without completing any care notes, open the global nav menu', async () => {
