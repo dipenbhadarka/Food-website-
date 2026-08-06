@@ -77,7 +77,7 @@ const selectors = {
         android: AndroidLocatorBuilder.xpath(
             '//android.webkit.WebView'
         ),
-        ios: iOSLocatorBuilder.className('XCUIElementTypeWebView'),
+        ios: iOSLocatorBuilder.xpath('//XCUIElementTypeWebView'),
     } as TestBotElement,
 
     nextButton: {
