@@ -473,7 +473,66 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
     })
 
     it('Step 10.3 - Open user dropdown and select user', async () => {
-        await testBot.click(selectors.userDropdownRow)
+        // NB: The provided positional XPath for the user
+        // dropdown row (LogonStartPage[2]/...) returned zero
+        // elements on a real device run. Trying multiple
+        // fallback locators in order before dumping page
+        // source, so we can lock in the correct one for good
+        // next time this fails.
+        let opened = false
+
+        // Attempt 1: the exact positional locator as provided
+        try {
+            await testBot.waitUntilVisible(selectors.userDropdownRow, 5000)
+            await testBot.click(selectors.userDropdownRow)
+            opened = true
+            console.log('Opened user dropdown via userDropdownRow (positional xpath)')
+        } catch (err) {
+            console.warn('userDropdownRow not found, trying userDropdown (EditText) fallback')
+        }
+
+        // Attempt 2: the EditText UserPicker locator
+        if (!opened) {
+            try {
+                await testBot.waitUntilVisible(selectors.userDropdown, 5000)
+                await testBot.click(selectors.userDropdown)
+                opened = true
+                console.log('Opened user dropdown via userDropdown (EditText UserPicker)')
+            } catch (err) {
+                console.warn('userDropdown (EditText) also not found')
+            }
+        }
+
+        // Attempt 3: any element containing "User" in its
+        // resource-id, as a last resort
+        if (!opened) {
+            try {
+                const anyUserField = await $(
+                    '//*[contains(@resource-id,"UserPicker") or contains(@resource-id,"User")]'
+                )
+                if (await anyUserField.isExisting()) {
+                    await anyUserField.click()
+                    opened = true
+                    console.log('Opened user dropdown via generic resource-id contains("User") match')
+                }
+            } catch (err) {
+                console.warn('Generic User field fallback also failed')
+            }
+        }
+
+        if (!opened) {
+            console.error('Could not open user dropdown with any method — dumping page source')
+            try {
+                const pageSource = await driver.getPageSource()
+                console.log('─────────── PAGE SOURCE: STEP 10.3 USER DROPDOWN NOT FOUND ───────────')
+                console.log(pageSource)
+                console.log('────────────────────────────────────────────────────────────────────')
+            } catch (srcErr) {
+                console.warn('getPageSource failed:', srcErr)
+            }
+            throw new Error('Could not open user dropdown with any locator')
+        }
+
         await driver.pause(1000)
         await selectPickerOptionRobust(USER)
         await driver.pause(1000)
