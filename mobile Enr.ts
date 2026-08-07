@@ -201,43 +201,76 @@ function pickerOption(text: string): TestBotElement {
 }
 
 // ─────────────────────────────────────────────
+// Helper — wraps any promise with a hard timeout,
+// so a stalled Appium command (e.g. findElements
+// hanging on a frozen UI thread) fails fast with a
+// clear error instead of hanging indefinitely and
+// silently consuming the whole test run.
+// ─────────────────────────────────────────────
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+    return Promise.race([
+        promise,
+        new Promise<T>((_, reject) =>
+            setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms — command likely hung`)), ms)
+        ),
+    ])
+}
+
+// ─────────────────────────────────────────────
 // Helper — robust picker selection with scroll
-// fallback and exact-match verification.
+// fallback and exact-match verification. Every
+// Appium call is wrapped with withTimeout so a
+// stalled command fails fast (8s) instead of
+// hanging indefinitely, since a genuinely frozen
+// UI thread has been observed to hang Appium
+// commands for minutes with no response.
 // ─────────────────────────────────────────────
 async function selectPickerOptionRobust(value: string): Promise<void> {
     const option = pickerOption(value)
 
     try {
-        await testBot.waitUntilVisible(option, 5000)
-        await testBot.click(option)
+        await withTimeout(testBot.waitUntilVisible(option, 5000), 8000, `waitUntilVisible("${value}")`)
+        await withTimeout(testBot.click(option), 8000, `click("${value}")`)
         console.log(`Selected "${value}" directly`)
         return
     } catch (err) {
-        console.warn(`Direct selection of "${value}" failed, trying scroll fallback`)
+        console.warn(`Direct selection of "${value}" failed (${err instanceof Error ? err.message : err}), trying scroll fallback`)
     }
 
     try {
-        const scrolled = await $(
-            'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
-            `.scrollIntoView(new UiSelector().textMatches("^${value}$"))`
+        const scrolled = await withTimeout(
+            $(
+                'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
+                `.scrollIntoView(new UiSelector().textMatches("^${value}$"))`
+            ),
+            8000,
+            `UiScrollable lookup ("${value}")`
         )
-        if (await scrolled.isExisting()) {
-            await scrolled.click()
+        if (await withTimeout(scrolled.isExisting(), 5000, `isExisting("${value}")`)) {
+            await withTimeout(scrolled.click(), 8000, `scrolled.click("${value}")`)
             console.log(`Selected "${value}" via UiScrollable scroll (exact match)`)
             return
         }
     } catch (err) {
-        console.warn(`UiScrollable fallback for "${value}" failed:`, err)
+        console.warn(`UiScrollable fallback for "${value}" failed (${err instanceof Error ? err.message : err})`)
     }
 
-    console.error(`Could not select "${value}" — dumping page source`)
+    console.error(`Could not select "${value}" — checking session health before dumping page source`)
+
+    // If the session itself is dead/hung, getPageSource will
+    // also hang or fail — timeout-wrap it too so we always
+    // get a clear final error either way.
     try {
-        const pageSource = await driver.getPageSource()
+        const pageSource = await withTimeout(driver.getPageSource(), 10000, 'getPageSource (final diagnostic)')
         console.log(`─────────── PAGE SOURCE: PICKER "${value}" ───────────`)
         console.log(pageSource)
         console.log('─────────────────────────────────────────────')
     } catch (srcErr) {
-        console.warn('getPageSource failed:', srcErr)
+        console.error(
+            `getPageSource ALSO failed/timed out (${srcErr instanceof Error ? srcErr.message : srcErr}) — ` +
+            'this strongly suggests the Appium session or UI thread is genuinely hung, not just a missing locator. ' +
+            'Consider restarting the Appium server and the app on device.'
+        )
     }
     throw new Error(`Could not select picker option "${value}"`)
 }
