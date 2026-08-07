@@ -648,11 +648,18 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
     it('Step 10.6 - Click Continue and land on Password page', async () => {
         // NB: A click that "succeeds" per Appium (element
         // found, tap sent) but produces no app response has
-        // been observed before. Verify the button is present
-        // and enabled first, tap it, then re-check whether we
-        // actually moved off this screen — retry once if not,
-        // before failing with a full diagnostic dump.
+        // been observed before. Try: dismiss keyboard (may be
+        // covering the button) -> tap -> retry tap -> coordinate
+        // tap as last resort -> full diagnostic dump.
         await testBot.waitUntilVisible(selectors.continueButton, 15000)
+
+        try {
+            await driver.hideKeyboard()
+            await driver.pause(1000)
+            console.log('Keyboard dismissed before tapping Continue')
+        } catch (err) {
+            console.warn('hideKeyboard failed or keyboard already hidden:', err)
+        }
 
         const continueBtn = await $(
             '//android.widget.Button[@resource-id="ContinueButton"]'
@@ -676,8 +683,36 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
             }
         }
 
+        // Last resort: tap the exact pixel center of the
+        // button's bounding box via a raw pointer action,
+        // bypassing Appium's element-click resolution
+        // entirely, in case the element click is registering
+        // on the wrong coordinates or a covering view.
         if (!landedOnPassword) {
-            console.error('Password page still not visible after retry — dumping page source')
+            console.warn('Still not on Password page — trying coordinate-based tap on Continue button')
+            try {
+                const location = await continueBtn.getLocation()
+                const size = await continueBtn.getSize()
+                const centerX = Math.floor(location.x + size.width / 2)
+                const centerY = Math.floor(location.y + size.height / 2)
+                console.log(`Tapping Continue at coordinates: ${centerX}, ${centerY}`)
+
+                await driver.action('pointer', { parameters: { pointerType: 'touch' } })
+                    .move({ duration: 0, x: centerX, y: centerY })
+                    .down({ button: 0 })
+                    .pause(100)
+                    .up({ button: 0 })
+                    .perform()
+
+                await driver.pause(2000)
+                landedOnPassword = await testBot.isVisible(selectors.passwordField).catch(() => false)
+            } catch (coordErr) {
+                console.warn('Coordinate-based tap on Continue failed:', coordErr)
+            }
+        }
+
+        if (!landedOnPassword) {
+            console.error('Password page still not visible after retry and coordinate tap — dumping page source')
             try {
                 const pageSource = await driver.getPageSource()
                 console.log('─────────── PAGE SOURCE AT STEP 10.6 ───────────')
