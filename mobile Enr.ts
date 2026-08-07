@@ -9,7 +9,7 @@ import { TestBotElement } from '../../TestBot/TestBotElement'
 const isLocal = process.env.RUN_MODE === 'local'
 const localAppPackage = process.env.LOCAL_APP_PACKAGE || 'com.personcentredsoftware.care.delivery'
 console.log(`▶ Running in ${isLocal ? 'LOCAL PHYSICAL DEVICE' : 'BROWSERSTACK CLOUD'} mode`)
-xa
+
 // ─────────────────────────────────────────────
 // Test Data
 // ─────────────────────────────────────────────
@@ -279,12 +279,51 @@ async function submitUsername(): Promise<void> {
 }
 
 // ─────────────────────────────────────────────
+// Device state flag — set by Step 0 below, read
+// by every enrolment step after it. If the device
+// is already enrolled ("Welcome Back" login screen
+// appears instead of the fresh Welcome screen with
+// the region dropdown), enrolment Steps 1-9 are
+// skipped automatically and the suite jumps
+// straight to the login flow (Step 10.1 onward),
+// which is what the "Welcome Back" screen actually
+// needs.
+// ─────────────────────────────────────────────
+let deviceAlreadyEnrolled = false
+
+// ─────────────────────────────────────────────
 // Suite — Enrolment & Login Flow
 // ─────────────────────────────────────────────
 describe('Care Delivery - Full Enrolment & Login Flow', () => {
 
-    it('Step 1 - App opens to Welcome screen with region dropdown and disabled Enrol button', async () => {
+    it('Step 0 - Detect whether device shows fresh Welcome screen or already-enrolled Welcome Back screen', async () => {
         await driver.pause(3000)
+
+        const regionDropdownVisible = await testBot.isVisible(selectors.regionDropdown).catch(() => false)
+        const loginLocationVisible = await testBot.isVisible(selectors.locationPickerLogin).catch(() => false)
+
+        if (regionDropdownVisible) {
+            deviceAlreadyEnrolled = false
+            console.log('Detected FRESH Welcome screen (region dropdown present) — will run full enrolment flow')
+        } else if (loginLocationVisible) {
+            deviceAlreadyEnrolled = true
+            console.log('Detected "Welcome Back" screen (device already enrolled) — will SKIP enrolment steps 1-9 and go straight to login')
+        } else {
+            console.warn('Could not confidently detect screen state — dumping page source, defaulting to attempt full enrolment flow')
+            try {
+                const pageSource = await driver.getPageSource()
+                console.log('─────────── PAGE SOURCE AT STEP 0 ───────────')
+                console.log(pageSource)
+                console.log('──────────────────────────────────────────')
+            } catch (srcErr) {
+                console.warn('getPageSource failed:', srcErr)
+            }
+            deviceAlreadyEnrolled = false
+        }
+    })
+
+    it('Step 1 - App opens to Welcome screen with region dropdown and disabled Enrol button', async function () {
+        if (deviceAlreadyEnrolled) { console.log('Skipping Step 1 — device already enrolled'); this.skip(); return }
         await testBot.waitUntilVisible(selectors.regionDropdown, 15000)
         await testBot.waitUntilVisible(selectors.enrollDeviceButton, 5000)
         const enrolBtn = await $(
@@ -294,7 +333,8 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         expect(isEnabled).toBe(false)
     })
 
-    it('Step 2 - Select United Kingdom and verify Enrol button becomes enabled', async () => {
+    it('Step 2 - Select United Kingdom and verify Enrol button becomes enabled', async function () {
+        if (deviceAlreadyEnrolled) { console.log('Skipping Step 2 — device already enrolled'); this.skip(); return }
         await testBot.click(selectors.regionDropdown)
         await driver.pause(1000)
         await testBot.waitUntilVisible(selectors.optionUnitedKingdom, 10000)
@@ -308,7 +348,8 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         expect(isEnabled).toBe(true)
     })
 
-    it('Step 3 - Click Enrol device and land on Username page', async () => {
+    it('Step 3 - Click Enrol device and land on Username page', async function () {
+        if (deviceAlreadyEnrolled) { console.log('Skipping Step 3 — device already enrolled'); this.skip(); return }
         await testBot.click(selectors.enrollDeviceButton)
         await driver.pause(isLocal ? 3000 : 5000)
 
@@ -328,7 +369,8 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         }
     })
 
-    it('Step 4 - Enter username and navigate to PCS Terms page', async () => {
+    it('Step 4 - Enter username and navigate to PCS Terms page', async function () {
+        if (deviceAlreadyEnrolled) { console.log('Skipping Step 4 — device already enrolled'); this.skip(); return }
         // NB: the username input is inside a WebView. Tap the
         // WebView area to focus, then type and submit.
         await testBot.click(selectors.usernameFieldWebView)
@@ -356,13 +398,15 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         }
     })
 
-    it('Step 5 - Click Continue and land on Password page', async () => {
+    it('Step 5 - Click Continue and land on Password page', async function () {
+        if (deviceAlreadyEnrolled) { console.log('Skipping Step 5 — device already enrolled'); this.skip(); return }
         await testBot.click(selectors.continueButton)
         await driver.pause(2000)
         await testBot.waitUntilVisible(selectors.passwordField, 20000)
     })
 
-    it('Step 6 - Enter password and navigate to Enrol page', async () => {
+    it('Step 6 - Enter password and navigate to Enrol page', async function () {
+        if (deviceAlreadyEnrolled) { console.log('Skipping Step 6 — device already enrolled'); this.skip(); return }
         await testBot.click(selectors.passwordField)
         await driver.pause(500)
         await testBot.enterText(selectors.passwordField, PASSWORD, false)
@@ -412,7 +456,8 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         }
     })
 
-    it('Step 7 - Select Organisation and Location; verify Enrol button is enabled', async () => {
+    it('Step 7 - Select Organisation and Location; verify Enrol button is enabled', async function () {
+        if (deviceAlreadyEnrolled) { console.log('Skipping Step 7 — device already enrolled'); this.skip(); return }
         await testBot.click(selectors.organisationDropdown)
         await driver.pause(1000)
         await selectPickerOptionRobust(ORGANISATION)
@@ -430,12 +475,14 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         expect(isEnabled).toBe(true)
     })
 
-    it('Step 8 - Click Enrol and see Device Enrolled page with Logout button', async () => {
+    it('Step 8 - Click Enrol and see Device Enrolled page with Logout button', async function () {
+        if (deviceAlreadyEnrolled) { console.log('Skipping Step 8 — device already enrolled'); this.skip(); return }
         await testBot.click(selectors.enrolButton)
         await testBot.waitUntilVisible(selectors.logoutButton, 30000)
     })
 
-    it('Step 9 - Click Log Out and land on Log In page', async () => {
+    it('Step 9 - Click Log Out and land on Log In page', async function () {
+        if (deviceAlreadyEnrolled) { console.log('Skipping Step 9 — device already enrolled'); this.skip(); return }
         await testBot.click(selectors.logoutButton)
         await driver.pause(2000)
         await testBot.waitUntilVisible(selectors.locationPickerLogin, 15000)
