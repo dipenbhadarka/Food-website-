@@ -629,12 +629,68 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
     it('Step 10.5 - Click Sign In and land on PCS Terms page', async () => {
         await testBot.click(selectors.signInButton)
         await driver.pause(3000)
-        await testBot.waitUntilVisible(selectors.continueButton, 20000)
+        try {
+            await testBot.waitUntilVisible(selectors.continueButton, 20000)
+        } catch (err) {
+            console.error('Continue button (PCS Terms page) not found after Sign In — dumping page source')
+            try {
+                const pageSource = await driver.getPageSource()
+                console.log('─────────── PAGE SOURCE AT STEP 10.5 ───────────')
+                console.log(pageSource)
+                console.log('─────────────────────────────────────────────')
+            } catch (srcErr) {
+                console.warn('getPageSource failed (session may be dead):', srcErr)
+            }
+            throw err
+        }
     })
 
     it('Step 10.6 - Click Continue and land on Password page', async () => {
+        // NB: A click that "succeeds" per Appium (element
+        // found, tap sent) but produces no app response has
+        // been observed before. Verify the button is present
+        // and enabled first, tap it, then re-check whether we
+        // actually moved off this screen — retry once if not,
+        // before failing with a full diagnostic dump.
+        await testBot.waitUntilVisible(selectors.continueButton, 15000)
+
+        const continueBtn = await $(
+            '//android.widget.Button[@resource-id="ContinueButton"]'
+        )
+        const isClickable = await continueBtn.isEnabled().catch(() => false)
+        console.log(`Continue button enabled: ${isClickable}`)
+
         await testBot.click(selectors.continueButton)
         await driver.pause(2000)
+
+        let landedOnPassword = await testBot.isVisible(selectors.passwordField).catch(() => false)
+
+        if (!landedOnPassword) {
+            console.warn('Password page not visible after first Continue tap — retrying tap once')
+            try {
+                await testBot.click(selectors.continueButton)
+                await driver.pause(2000)
+                landedOnPassword = await testBot.isVisible(selectors.passwordField).catch(() => false)
+            } catch (retryErr) {
+                console.warn('Retry tap on Continue failed:', retryErr)
+            }
+        }
+
+        if (!landedOnPassword) {
+            console.error('Password page still not visible after retry — dumping page source')
+            try {
+                const pageSource = await driver.getPageSource()
+                console.log('─────────── PAGE SOURCE AT STEP 10.6 ───────────')
+                console.log(pageSource)
+                console.log('─────────────────────────────────────────────')
+            } catch (srcErr) {
+                console.error(
+                    `getPageSource ALSO failed (${srcErr instanceof Error ? srcErr.message : srcErr}) — ` +
+                    'session likely dead. Consider restarting Appium and the app on device.'
+                )
+            }
+        }
+
         await testBot.waitUntilVisible(selectors.passwordField, 20000)
     })
 
