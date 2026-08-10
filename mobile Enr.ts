@@ -220,11 +220,44 @@ async function dumpPageSourceOnFailure(stepLabel: string) {
 }
 
 // ─────────────────────────────────────────────
+// Device state flag — set by Step 0, read by
+// every enrolment step after it. If the device is
+// already enrolled ("Welcome Back" login screen
+// appears instead of the fresh Welcome screen with
+// the region dropdown), enrolment Steps 1-11 are
+// skipped automatically and the suite jumps
+// straight to the login/user-selection flow
+// (Step 12 onward), which is what "Welcome Back"
+// actually needs.
+// ─────────────────────────────────────────────
+let deviceAlreadyEnrolled = false
+
+// ─────────────────────────────────────────────
 // Suite — XCover5 Enrolment Flow
 // ─────────────────────────────────────────────
 describe('Care Delivery - XCover5 Enrolment Flow', () => {
 
-    it('Step 1 - App opens to Welcome screen with region dropdown', async () => {
+    it('Step 0 - Detect whether device shows fresh Welcome screen or already-enrolled Welcome Back screen', async () => {
+        await driver.pause(3000)
+
+        const regionDropdownVisible = await testBot.isVisible(selectors.regionDropdown).catch(() => false)
+        const loginUserDropdownVisible = await testBot.isVisible(selectors.userDropdown).catch(() => false)
+
+        if (regionDropdownVisible) {
+            deviceAlreadyEnrolled = false
+            console.log('Detected FRESH Welcome screen (region dropdown present) — will run full enrolment flow')
+        } else if (loginUserDropdownVisible) {
+            deviceAlreadyEnrolled = true
+            console.log('Detected "Welcome Back" screen (device already enrolled) — will SKIP enrolment steps 1-11 and go straight to user selection/login')
+        } else {
+            console.warn('Could not confidently detect screen state — dumping page source, defaulting to attempt full enrolment flow')
+            await dumpPageSourceOnFailure('Step 0 (undetected screen state)')
+            deviceAlreadyEnrolled = false
+        }
+    })
+
+    it('Step 1 - App opens to Welcome screen with region dropdown', async function () {
+        if (deviceAlreadyEnrolled) { console.log('Skipping Step 1 — device already enrolled'); this.skip(); return }
         await driver.pause(3000)
         try {
             await testBot.waitUntilVisible(selectors.regionDropdown, 15000)
@@ -235,7 +268,8 @@ describe('Care Delivery - XCover5 Enrolment Flow', () => {
         }
     })
 
-    it('Step 2 - Select region dropdown and choose United Kingdom', async () => {
+    it('Step 2 - Select region dropdown and choose United Kingdom', async function () {
+        if (deviceAlreadyEnrolled) { console.log('Skipping Step 2 — device already enrolled'); this.skip(); return }
         await testBot.click(selectors.regionDropdown)
         await driver.pause(1000)
         try {
@@ -254,12 +288,14 @@ describe('Care Delivery - XCover5 Enrolment Flow', () => {
         expect(isEnabled).toBe(true)
     })
 
-    it('Step 3 - Click Enrol device button', async () => {
+    it('Step 3 - Click Enrol device button', async function () {
+        if (deviceAlreadyEnrolled) { console.log('Skipping Step 3 — device already enrolled'); this.skip(); return }
         await testBot.click(selectors.enrollDeviceButton)
         await driver.pause(isLocal ? 3000 : 5000)
     })
 
-    it('Step 4 - Click the Login button to proceed to identity flow', async () => {
+    it('Step 4 - Click the Login button to proceed to identity flow', async function () {
+        if (deviceAlreadyEnrolled) { console.log('Skipping Step 4 — device already enrolled'); this.skip(); return }
         try {
             await testBot.waitUntilVisible(selectors.clickEnrollDeviceButton, 15000)
             await testBot.click(selectors.clickEnrollDeviceButton)
@@ -270,7 +306,8 @@ describe('Care Delivery - XCover5 Enrolment Flow', () => {
         }
     })
 
-    it('Step 5 - Enter username and click Next', async () => {
+    it('Step 5 - Enter username and click Next', async function () {
+        if (deviceAlreadyEnrolled) { console.log('Skipping Step 5 — device already enrolled'); this.skip(); return }
         try {
             await testBot.waitUntilVisible(selectors.usernameField, 20000)
             await testBot.click(selectors.usernameField)
@@ -287,7 +324,8 @@ describe('Care Delivery - XCover5 Enrolment Flow', () => {
         }
     })
 
-    it('Step 6 - Click Continue on the PCS Terms page', async () => {
+    it('Step 6 - Click Continue on the PCS Terms page', async function () {
+        if (deviceAlreadyEnrolled) { console.log('Skipping Step 6 — device already enrolled'); this.skip(); return }
         try {
             await testBot.waitUntilVisible(selectors.continueButton, 20000)
             await testBot.click(selectors.continueButton)
@@ -298,7 +336,8 @@ describe('Care Delivery - XCover5 Enrolment Flow', () => {
         }
     })
 
-    it('Step 7 - Enter password and click Login', async () => {
+    it('Step 7 - Enter password and click Login', async function () {
+        if (deviceAlreadyEnrolled) { console.log('Skipping Step 7 — device already enrolled'); this.skip(); return }
         try {
             await testBot.waitUntilVisible(selectors.passwordField, 20000)
             await testBot.click(selectors.passwordField)
@@ -338,7 +377,8 @@ describe('Care Delivery - XCover5 Enrolment Flow', () => {
         }
     })
 
-    it('Step 8 - Select Organisation: Person Centred Software', async () => {
+    it('Step 8 - Select Organisation: Person Centred Software', async function () {
+        if (deviceAlreadyEnrolled) { console.log('Skipping Step 8 — device already enrolled'); this.skip(); return }
         try {
             await testBot.click(selectors.organisationDropdown)
             await driver.pause(1000)
@@ -351,7 +391,8 @@ describe('Care Delivery - XCover5 Enrolment Flow', () => {
         }
     })
 
-    it('Step 9 - Select Location: Kerr House', async () => {
+    it('Step 9 - Select Location: Kerr House', async function () {
+        if (deviceAlreadyEnrolled) { console.log('Skipping Step 9 — device already enrolled'); this.skip(); return }
         try {
             await testBot.click(selectors.locationDropdown)
             await driver.pause(1000)
@@ -370,7 +411,8 @@ describe('Care Delivery - XCover5 Enrolment Flow', () => {
         expect(isEnabled).toBe(true)
     })
 
-    it('Step 10 - Click Enrol', async () => {
+    it('Step 10 - Click Enrol', async function () {
+        if (deviceAlreadyEnrolled) { console.log('Skipping Step 10 — device already enrolled'); this.skip(); return }
         try {
             await testBot.click(selectors.enrolButton)
             await testBot.waitUntilVisible(selectors.logoutButton, 30000)
@@ -380,7 +422,8 @@ describe('Care Delivery - XCover5 Enrolment Flow', () => {
         }
     })
 
-    it('Step 11 - Click Logout', async () => {
+    it('Step 11 - Click Logout', async function () {
+        if (deviceAlreadyEnrolled) { console.log('Skipping Step 11 — device already enrolled'); this.skip(); return }
         try {
             await testBot.click(selectors.logoutButton)
             await driver.pause(2000)
