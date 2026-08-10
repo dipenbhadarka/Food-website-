@@ -461,6 +461,19 @@ describe('Care Delivery - XCover5 Enrolment Flow', () => {
         try {
             await testBot.click(selectors.signInButton)
             await driver.pause(3000)
+
+            // NB: ContinueButton's resource-id is reused across
+            // multiple screens in this app. Confirm the user
+            // dropdown/sign-in screen has actually gone away
+            // before treating "continueButton visible" as the
+            // NEW screen, otherwise a stale element reference
+            // from the previous screen can be clicked instead.
+            const stillOnSignInScreen = await testBot.isVisible(selectors.userDropdown).catch(() => false)
+            if (stillOnSignInScreen) {
+                console.warn('Still showing user dropdown after Sign In tap — waiting for screen transition')
+                await driver.pause(2000)
+            }
+
             await testBot.waitUntilVisible(selectors.continueButton, 20000)
         } catch (err) {
             await dumpPageSourceOnFailure('Step 13')
@@ -470,6 +483,18 @@ describe('Care Delivery - XCover5 Enrolment Flow', () => {
 
     it('Step 14 - Click Continue', async () => {
         try {
+            // Re-confirm we are NOT still on the user
+            // dropdown/sign-in screen before proceeding —
+            // guards against a stale ContinueButton reference
+            // from an earlier screen being clicked instead of
+            // the real one on the PCS Terms page.
+            const stillOnSignInScreen = await testBot.isVisible(selectors.userDropdown).catch(() => false)
+            if (stillOnSignInScreen) {
+                console.error('Step 14 started but still on the user dropdown/sign-in screen — Sign In may not have registered. Dumping page source.')
+                await dumpPageSourceOnFailure('Step 14 (unexpected screen)')
+                throw new Error('Step 14: still on sign-in screen, expected PCS Terms/Continue screen')
+            }
+
             await testBot.waitUntilVisible(selectors.continueButton, 15000)
 
             try {
@@ -479,16 +504,29 @@ describe('Care Delivery - XCover5 Enrolment Flow', () => {
                 console.warn('hideKeyboard failed or keyboard already hidden:', kbErr)
             }
 
-            await testBot.click(selectors.continueButton)
+            // Re-fetch the Continue button element fresh right
+            // before clicking, rather than reusing whatever
+            // waitUntilVisible found — avoids acting on a
+            // stale element reference from a prior screen.
+            const freshContinueBtn = await $(
+                '//android.widget.Button[@resource-id="ContinueButton"]'
+            )
+            await freshContinueBtn.waitForDisplayed({ timeout: 10000 })
+            await freshContinueBtn.click()
             await driver.pause(2000)
 
             let landedOnPassword = await testBot.isVisible(selectors.passwordField).catch(() => false)
 
             if (!landedOnPassword) {
                 console.warn('Password page not visible after first Continue tap — retrying tap once')
-                await testBot.click(selectors.continueButton)
-                await driver.pause(2000)
-                landedOnPassword = await testBot.isVisible(selectors.passwordField).catch(() => false)
+                const retryBtn = await $(
+                    '//android.widget.Button[@resource-id="ContinueButton"]'
+                )
+                if (await retryBtn.isExisting()) {
+                    await retryBtn.click()
+                    await driver.pause(2000)
+                    landedOnPassword = await testBot.isVisible(selectors.passwordField).catch(() => false)
+                }
             }
 
             if (!landedOnPassword) {
@@ -496,20 +534,24 @@ describe('Care Delivery - XCover5 Enrolment Flow', () => {
                 const continueBtn = await $(
                     '//android.widget.Button[@resource-id="ContinueButton"]'
                 )
-                const location = await continueBtn.getLocation()
-                const size = await continueBtn.getSize()
-                const centerX = Math.floor(location.x + size.width / 2)
-                const centerY = Math.floor(location.y + size.height / 2)
-                console.log(`Tapping Continue at coordinates: ${centerX}, ${centerY}`)
+                if (await continueBtn.isExisting()) {
+                    const location = await continueBtn.getLocation()
+                    const size = await continueBtn.getSize()
+                    const centerX = Math.floor(location.x + size.width / 2)
+                    const centerY = Math.floor(location.y + size.height / 2)
+                    console.log(`Tapping Continue at coordinates: ${centerX}, ${centerY}`)
 
-                await driver.action('pointer', { parameters: { pointerType: 'touch' } })
-                    .move({ duration: 0, x: centerX, y: centerY })
-                    .down({ button: 0 })
-                    .pause(100)
-                    .up({ button: 0 })
-                    .perform()
+                    await driver.action('pointer', { parameters: { pointerType: 'touch' } })
+                        .move({ duration: 0, x: centerX, y: centerY })
+                        .down({ button: 0 })
+                        .pause(100)
+                        .up({ button: 0 })
+                        .perform()
 
-                await driver.pause(2000)
+                    await driver.pause(2000)
+                } else {
+                    console.error('Continue button no longer exists on screen — screen state has changed unexpectedly')
+                }
             }
 
             await testBot.waitUntilVisible(selectors.passwordField, 20000)
