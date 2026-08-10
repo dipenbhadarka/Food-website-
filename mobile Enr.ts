@@ -20,24 +20,10 @@ const LOCATION = 'Kerr House'
 const USER = 'Akhila Nethi'
 
 // ─────────────────────────────────────────────
-// Selectors — built directly from the provided
-// locator list, in the order given
+// Selectors — built from the confirmed original
+// locator set
 // ─────────────────────────────────────────────
 const selectors = {
-    infoButton: {
-        android: AndroidLocatorBuilder.xpath(
-            '//android.view.ViewGroup[@resource-id="com.personcentredsoftware.care.delivery:id/InfoButton"]/android.view.ViewGroup/android.widget.Button'
-        ),
-        ios: iOSLocatorBuilder.id('InfoButton'),
-    } as TestBotElement,
-
-    enrollDeviceButton: {
-        android: AndroidLocatorBuilder.xpath(
-            '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/EnrollDeviceButton"]'
-        ),
-        ios: iOSLocatorBuilder.id('EnrollDeviceButton'),
-    } as TestBotElement,
-
     regionDropdown: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/EnvironmentPicker"]'
@@ -54,27 +40,31 @@ const selectors = {
         ),
     } as TestBotElement,
 
-    // "click enrol device button" — this is the button that
-    // appears after region selection to trigger the identity
-    // enrolment flow (resource-id is LoginButton per the
-    // provided locator).
-    clickEnrollDeviceButton: {
+    cancelButton: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.Button[@resource-id="android:id/button2"]'
+        ),
+        ios: iOSLocatorBuilder.id('Cancel'),
+    } as TestBotElement,
+
+    enrollDeviceButton: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/LoginButton"]'
         ),
         ios: iOSLocatorBuilder.id('LoginButton'),
     } as TestBotElement,
 
+    // Username field lives inside a WebView on the identity page
     usernameField: {
         android: AndroidLocatorBuilder.xpath(
-            '//android.widget.EditText[@resource-id="Username"]'
+            '//android.view.View[@resource-id="AccountLogin"]/android.view.View'
         ),
-        ios: iOSLocatorBuilder.id('Username'),
+        ios: iOSLocatorBuilder.id('AccountLogin'),
     } as TestBotElement,
 
     nextButton: {
         android: AndroidLocatorBuilder.xpath(
-            '//android.widget.Button[@resource-id="NextButton"]'
+            '//android.webkit.WebView[@text="Person Centred Software"]'
         ),
         ios: iOSLocatorBuilder.id('Next'),
     } as TestBotElement,
@@ -93,11 +83,36 @@ const selectors = {
         ios: iOSLocatorBuilder.id('Password'),
     } as TestBotElement,
 
+    forgotPasswordLink: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.TextView[@text="Forgot Password?"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeStaticText[@name="Forgot Password?"]'
+        ),
+    } as TestBotElement,
+
+    keepMeLoggedInCheckbox: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.CheckBox[@resource-id="RememberLogin"]'
+        ),
+        ios: iOSLocatorBuilder.id('RememberLogin'),
+    } as TestBotElement,
+
     identityLoginButton: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.Button[@resource-id="LoginButton"]'
         ),
         ios: iOSLocatorBuilder.id('LoginButton'),
+    } as TestBotElement,
+
+    deviceNameField: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.TextView[@text="Enter location of device"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeStaticText[@name="Enter location of device"]'
+        ),
     } as TestBotElement,
 
     organisationDropdown: {
@@ -107,29 +122,11 @@ const selectors = {
         ios: iOSLocatorBuilder.id('OrganisationPicker'),
     } as TestBotElement,
 
-    organisationOptionPersonCentredSoftware: {
-        android: AndroidLocatorBuilder.xpath(
-            `//android.widget.TextView[@resource-id="android:id/text1" and @text="${ORGANISATION}"]`
-        ),
-        ios: iOSLocatorBuilder.xpath(
-            `//XCUIElementTypePickerWheel[@value="${ORGANISATION}"]`
-        ),
-    } as TestBotElement,
-
     locationDropdown: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/LocationPicker"]'
         ),
         ios: iOSLocatorBuilder.id('LocationPicker'),
-    } as TestBotElement,
-
-    optionKerrHouse: {
-        android: AndroidLocatorBuilder.xpath(
-            `//android.widget.TextView[@resource-id="android:id/text1" and @text="${LOCATION}"]`
-        ),
-        ios: iOSLocatorBuilder.xpath(
-            `//XCUIElementTypePickerWheel[@value="${LOCATION}"]`
-        ),
     } as TestBotElement,
 
     enrolButton: {
@@ -146,20 +143,18 @@ const selectors = {
         ios: iOSLocatorBuilder.id('LogoutButton'),
     } as TestBotElement,
 
+    locationPickerLogin: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/LocationPicker"]'
+        ),
+        ios: iOSLocatorBuilder.id('LocationPicker'),
+    } as TestBotElement,
+
     userDropdown: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/UserPicker"]'
         ),
         ios: iOSLocatorBuilder.id('UserPicker'),
-    } as TestBotElement,
-
-    optionAkhilaNethi: {
-        android: AndroidLocatorBuilder.xpath(
-            `//android.widget.TextView[@resource-id="android:id/text1" and @text="${USER}"]`
-        ),
-        ios: iOSLocatorBuilder.xpath(
-            `//XCUIElementTypePickerWheel[@value="${USER}"]`
-        ),
     } as TestBotElement,
 
     signInButton: {
@@ -178,6 +173,33 @@ const selectors = {
         ),
     } as TestBotElement,
 
+    kerrHouseServiceUsersRow: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.TextView[@text="Kerr House / Service Users"]/ancestor::android.view.ViewGroup[@clickable="true"][1]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeStaticText[@name="Kerr House / Service Users"]'
+        ),
+    } as TestBotElement,
+
+    kerrHouseSouthWing: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.TextView[@text="Kerr House / South Wing - First Floor"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeStaticText[@name="Kerr House / South Wing - First Floor"]'
+        ),
+    } as TestBotElement,
+
+    kerrHouseTraining: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.TextView[@text="Kerr House / Training"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeStaticText[@name="Kerr House / Training"]'
+        ),
+    } as TestBotElement,
+
     startWorkButton: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/StartWorkButton"]'
@@ -186,28 +208,24 @@ const selectors = {
     } as TestBotElement,
 }
 
-// ─────────────────────────────────────────────
-// Helper — wraps a promise with a hard timeout so
-// a stalled Appium command fails fast with a clear
-// error instead of hanging indefinitely.
-// ─────────────────────────────────────────────
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-    return Promise.race([
-        promise,
-        new Promise<T>((_, reject) =>
-            setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms — command likely hung`)), ms)
+function pickerOption(text: string): TestBotElement {
+    return {
+        android: AndroidLocatorBuilder.xpath(
+            `//android.widget.TextView[@resource-id="android:id/text1" and @text="${text}"]`
         ),
-    ])
+        ios: iOSLocatorBuilder.xpath(
+            `//XCUIElementTypePickerWheel[@value="${text}"]`
+        ),
+    } as TestBotElement
 }
 
 // ─────────────────────────────────────────────
-// Helper — dump page source safely, without
-// throwing if the session itself is dead.
+// Helper — dump page source safely
 // ─────────────────────────────────────────────
 async function dumpPageSourceOnFailure(stepLabel: string) {
     console.error(`Failure at ${stepLabel} — dumping page source`)
     try {
-        const pageSource = await withTimeout(driver.getPageSource(), 10000, `getPageSource (${stepLabel})`)
+        const pageSource = await driver.getPageSource()
         console.log(`─────────── PAGE SOURCE: ${stepLabel} ───────────`)
         console.log(pageSource)
         console.log('─────────────────────────────────────────────')
@@ -220,24 +238,58 @@ async function dumpPageSourceOnFailure(stepLabel: string) {
 }
 
 // ─────────────────────────────────────────────
+// Helper — robust picker selection with scroll
+// fallback and exact-match verification.
+// ─────────────────────────────────────────────
+async function selectPickerOptionRobust(value: string): Promise<void> {
+    const option = pickerOption(value)
+
+    try {
+        await testBot.waitUntilVisible(option, 5000)
+        await testBot.click(option)
+        console.log(`Selected "${value}" directly`)
+        return
+    } catch (err) {
+        console.warn(`Direct selection of "${value}" failed, trying scroll fallback`)
+    }
+
+    try {
+        const scrolled = await $(
+            'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
+            `.scrollIntoView(new UiSelector().textMatches("^${value}$"))`
+        )
+        if (await scrolled.isExisting()) {
+            await scrolled.click()
+            console.log(`Selected "${value}" via UiScrollable scroll (exact match)`)
+            return
+        }
+    } catch (err) {
+        console.warn(`UiScrollable fallback for "${value}" failed:`, err)
+    }
+
+    console.error(`Could not select "${value}" — dumping page source`)
+    await dumpPageSourceOnFailure(`picker selection "${value}"`)
+    throw new Error(`Could not select picker option "${value}"`)
+}
+
+// ─────────────────────────────────────────────
 // Device state flag — set by Step 0, read by
-// every enrolment step after it. If the device is
-// already enrolled ("Welcome Back" login screen
-// appears instead of the fresh Welcome screen with
-// the region dropdown), enrolment Steps 1-11 are
-// skipped automatically and the suite jumps
-// straight to the login/user-selection flow
-// (Step 12 onward), which is what "Welcome Back"
-// actually needs.
+// every enrolment step after it.
+// NB: Every test below uses a plain "function ()"
+// (not an arrow function "() => {}") specifically
+// so that "this.skip()" works correctly in every
+// step — arrow functions do not bind their own
+// "this", so calling this.skip() inside one throws
+// "Property 'skip' does not exist".
 // ─────────────────────────────────────────────
 let deviceAlreadyEnrolled = false
 
 // ─────────────────────────────────────────────
-// Suite — XCover5 Enrolment Flow
+// Suite — Enrolment & Login Flow
 // ─────────────────────────────────────────────
-describe('Care Delivery - XCover5 Enrolment Flow', () => {
+describe('Care Delivery - Full Enrolment & Login Flow', () => {
 
-    it('Step 0 - Detect whether device shows fresh Welcome screen or already-enrolled Welcome Back screen', async () => {
+    it('Step 0 - Detect whether device shows fresh Welcome screen or already-enrolled Welcome Back screen', async function () {
         await driver.pause(3000)
 
         const regionDropdownVisible = await testBot.isVisible(selectors.regionDropdown).catch(() => false)
@@ -248,7 +300,7 @@ describe('Care Delivery - XCover5 Enrolment Flow', () => {
             console.log('Detected FRESH Welcome screen (region dropdown present) — will run full enrolment flow')
         } else if (loginUserDropdownVisible) {
             deviceAlreadyEnrolled = true
-            console.log('Detected "Welcome Back" screen (device already enrolled) — will SKIP enrolment steps 1-11 and go straight to user selection/login')
+            console.log('Detected "Welcome Back" screen (device already enrolled) — will SKIP enrolment steps and go straight to login')
         } else {
             console.warn('Could not confidently detect screen state — dumping page source, defaulting to attempt full enrolment flow')
             await dumpPageSourceOnFailure('Step 0 (undetected screen state)')
@@ -256,49 +308,52 @@ describe('Care Delivery - XCover5 Enrolment Flow', () => {
         }
     })
 
-    it('Step 1 - App opens to Welcome screen with region dropdown', async function () {
+    it('Step 1 - Select region dropdown and choose United Kingdom', async function () {
         if (deviceAlreadyEnrolled) { console.log('Skipping Step 1 — device already enrolled'); this.skip(); return }
-        await driver.pause(3000)
         try {
             await testBot.waitUntilVisible(selectors.regionDropdown, 15000)
-            await testBot.waitUntilVisible(selectors.enrollDeviceButton, 5000)
+            await testBot.click(selectors.regionDropdown)
+            await driver.pause(1000)
+            await testBot.waitUntilVisible(selectors.optionUnitedKingdom, 10000)
+            await testBot.click(selectors.optionUnitedKingdom)
+            await driver.pause(1000)
         } catch (err) {
             await dumpPageSourceOnFailure('Step 1')
             throw err
         }
     })
 
-    it('Step 2 - Select region dropdown and choose United Kingdom', async function () {
+    it('Step 2 - Click Enrol Device (Login) button', async function () {
         if (deviceAlreadyEnrolled) { console.log('Skipping Step 2 — device already enrolled'); this.skip(); return }
-        await testBot.click(selectors.regionDropdown)
-        await driver.pause(1000)
         try {
-            await testBot.waitUntilVisible(selectors.optionUnitedKingdom, 10000)
-            await testBot.click(selectors.optionUnitedKingdom)
-            await driver.pause(1000)
+            await testBot.waitUntilVisible(selectors.enrollDeviceButton, 10000)
+            await testBot.click(selectors.enrollDeviceButton)
+            await driver.pause(isLocal ? 3000 : 5000)
         } catch (err) {
             await dumpPageSourceOnFailure('Step 2')
             throw err
         }
-
-        const enrolBtn = await $(
-            '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/EnrollDeviceButton"]'
-        )
-        const isEnabled = await enrolBtn.isEnabled()
-        expect(isEnabled).toBe(true)
     })
 
-    it('Step 3 - Click Enrol device button', async function () {
+    it('Step 3 - Enter username and click Next', async function () {
         if (deviceAlreadyEnrolled) { console.log('Skipping Step 3 — device already enrolled'); this.skip(); return }
-        await testBot.click(selectors.enrollDeviceButton)
-        await driver.pause(isLocal ? 3000 : 5000)
+        try {
+            await testBot.waitUntilVisible(selectors.usernameField, 20000)
+            await testBot.click(selectors.usernameField)
+            await testBot.enterText(selectors.usernameField, USERNAME, false)
+            await testBot.click(selectors.nextButton)
+            await driver.pause(2000)
+        } catch (err) {
+            await dumpPageSourceOnFailure('Step 3')
+            throw err
+        }
     })
 
-    it('Step 4 - Click the Login button to proceed to identity flow', async function () {
+    it('Step 4 - Click Continue on PCS Terms page', async function () {
         if (deviceAlreadyEnrolled) { console.log('Skipping Step 4 — device already enrolled'); this.skip(); return }
         try {
-            await testBot.waitUntilVisible(selectors.clickEnrollDeviceButton, 15000)
-            await testBot.click(selectors.clickEnrollDeviceButton)
+            await testBot.waitUntilVisible(selectors.continueButton, 15000)
+            await testBot.click(selectors.continueButton)
             await driver.pause(2000)
         } catch (err) {
             await dumpPageSourceOnFailure('Step 4')
@@ -306,44 +361,12 @@ describe('Care Delivery - XCover5 Enrolment Flow', () => {
         }
     })
 
-    it('Step 5 - Enter username and click Next', async function () {
+    it('Step 5 - Enter password and click Login', async function () {
         if (deviceAlreadyEnrolled) { console.log('Skipping Step 5 — device already enrolled'); this.skip(); return }
-        try {
-            await testBot.waitUntilVisible(selectors.usernameField, 20000)
-            await testBot.click(selectors.usernameField)
-            await driver.pause(500)
-            await testBot.enterText(selectors.usernameField, USERNAME, false)
-            await driver.pause(500)
-
-            await testBot.waitUntilVisible(selectors.nextButton, 10000)
-            await testBot.click(selectors.nextButton)
-            await driver.pause(2000)
-        } catch (err) {
-            await dumpPageSourceOnFailure('Step 5')
-            throw err
-        }
-    })
-
-    it('Step 6 - Click Continue on the PCS Terms page', async function () {
-        if (deviceAlreadyEnrolled) { console.log('Skipping Step 6 — device already enrolled'); this.skip(); return }
-        try {
-            await testBot.waitUntilVisible(selectors.continueButton, 20000)
-            await testBot.click(selectors.continueButton)
-            await driver.pause(2000)
-        } catch (err) {
-            await dumpPageSourceOnFailure('Step 6')
-            throw err
-        }
-    })
-
-    it('Step 7 - Enter password and click Login', async function () {
-        if (deviceAlreadyEnrolled) { console.log('Skipping Step 7 — device already enrolled'); this.skip(); return }
         try {
             await testBot.waitUntilVisible(selectors.passwordField, 20000)
             await testBot.click(selectors.passwordField)
-            await driver.pause(500)
             await testBot.enterText(selectors.passwordField, PASSWORD, false)
-            await driver.pause(500)
 
             try {
                 await driver.hideKeyboard()
@@ -355,9 +378,6 @@ describe('Care Delivery - XCover5 Enrolment Flow', () => {
             await testBot.waitUntilVisible(selectors.identityLoginButton, 10000)
             await testBot.click(selectors.identityLoginButton)
 
-            // Identity auth may briefly background the app on
-            // physical device — give it time and force it back
-            // to foreground before checking for the enrol page.
             const postLoginWait = isLocal ? 120000 : 20000
             await driver.pause(isLocal ? 5000 : 3000)
 
@@ -372,35 +392,33 @@ describe('Care Delivery - XCover5 Enrolment Flow', () => {
 
             await testBot.waitUntilVisible(selectors.organisationDropdown, postLoginWait)
         } catch (err) {
-            await dumpPageSourceOnFailure('Step 7')
+            await dumpPageSourceOnFailure('Step 5')
             throw err
         }
     })
 
-    it('Step 8 - Select Organisation: Person Centred Software', async function () {
-        if (deviceAlreadyEnrolled) { console.log('Skipping Step 8 — device already enrolled'); this.skip(); return }
+    it('Step 6 - Select Organisation: Person Centred Software', async function () {
+        if (deviceAlreadyEnrolled) { console.log('Skipping Step 6 — device already enrolled'); this.skip(); return }
         try {
             await testBot.click(selectors.organisationDropdown)
             await driver.pause(1000)
-            await testBot.waitUntilVisible(selectors.organisationOptionPersonCentredSoftware, 10000)
-            await testBot.click(selectors.organisationOptionPersonCentredSoftware)
+            await selectPickerOptionRobust(ORGANISATION)
             await driver.pause(1000)
         } catch (err) {
-            await dumpPageSourceOnFailure('Step 8')
+            await dumpPageSourceOnFailure('Step 6')
             throw err
         }
     })
 
-    it('Step 9 - Select Location: Kerr House', async function () {
-        if (deviceAlreadyEnrolled) { console.log('Skipping Step 9 — device already enrolled'); this.skip(); return }
+    it('Step 7 - Select Location: Kerr House', async function () {
+        if (deviceAlreadyEnrolled) { console.log('Skipping Step 7 — device already enrolled'); this.skip(); return }
         try {
             await testBot.click(selectors.locationDropdown)
             await driver.pause(1000)
-            await testBot.waitUntilVisible(selectors.optionKerrHouse, 10000)
-            await testBot.click(selectors.optionKerrHouse)
+            await selectPickerOptionRobust(LOCATION)
             await driver.pause(1000)
         } catch (err) {
-            await dumpPageSourceOnFailure('Step 9')
+            await dumpPageSourceOnFailure('Step 7')
             throw err
         }
 
@@ -411,42 +429,49 @@ describe('Care Delivery - XCover5 Enrolment Flow', () => {
         expect(isEnabled).toBe(true)
     })
 
-    it('Step 10 - Click Enrol', async function () {
-        if (deviceAlreadyEnrolled) { console.log('Skipping Step 10 — device already enrolled'); this.skip(); return }
+    it('Step 8 - Click Enrol', async function () {
+        if (deviceAlreadyEnrolled) { console.log('Skipping Step 8 — device already enrolled'); this.skip(); return }
         try {
             await testBot.click(selectors.enrolButton)
             await testBot.waitUntilVisible(selectors.logoutButton, 30000)
         } catch (err) {
-            await dumpPageSourceOnFailure('Step 10')
+            await dumpPageSourceOnFailure('Step 8')
             throw err
         }
     })
 
-    it('Step 11 - Click Logout', async function () {
-        if (deviceAlreadyEnrolled) { console.log('Skipping Step 11 — device already enrolled'); this.skip(); return }
+    it('Step 9 - Click Logout', async function () {
+        if (deviceAlreadyEnrolled) { console.log('Skipping Step 9 — device already enrolled'); this.skip(); return }
         try {
             await testBot.click(selectors.logoutButton)
             await driver.pause(2000)
             await testBot.waitUntilVisible(selectors.userDropdown, 15000)
         } catch (err) {
-            await dumpPageSourceOnFailure('Step 11')
+            await dumpPageSourceOnFailure('Step 9')
             throw err
         }
     })
 
-    it('Step 12 - Select user: Akhila Nethi', async () => {
+    it('Step 10 - Select Location and User (login screen)', async function () {
         try {
+            const locationEl = await $(
+                '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/LocationPicker"]'
+            )
+            const locationValue = await locationEl.getText().catch(() => '')
+
+            if (!locationValue.includes(LOCATION)) {
+                await testBot.click(selectors.locationPickerLogin)
+                await driver.pause(1000)
+                await selectPickerOptionRobust(LOCATION)
+                await driver.pause(1000)
+            }
+
             await testBot.click(selectors.userDropdown)
             await driver.pause(1000)
-            await withTimeout(
-                testBot.waitUntilVisible(selectors.optionAkhilaNethi, 10000),
-                12000,
-                'waitUntilVisible(Akhila Nethi)'
-            )
-            await testBot.click(selectors.optionAkhilaNethi)
+            await selectPickerOptionRobust(USER)
             await driver.pause(1000)
         } catch (err) {
-            await dumpPageSourceOnFailure('Step 12')
+            await dumpPageSourceOnFailure('Step 10')
             throw err
         }
 
@@ -457,17 +482,11 @@ describe('Care Delivery - XCover5 Enrolment Flow', () => {
         expect(isEnabled).toBe(true)
     })
 
-    it('Step 13 - Click Sign In', async () => {
+    it('Step 11 - Click Sign In', async function () {
         try {
             await testBot.click(selectors.signInButton)
             await driver.pause(3000)
 
-            // NB: ContinueButton's resource-id is reused across
-            // multiple screens in this app. Confirm the user
-            // dropdown/sign-in screen has actually gone away
-            // before treating "continueButton visible" as the
-            // NEW screen, otherwise a stale element reference
-            // from the previous screen can be clicked instead.
             const stillOnSignInScreen = await testBot.isVisible(selectors.userDropdown).catch(() => false)
             if (stillOnSignInScreen) {
                 console.warn('Still showing user dropdown after Sign In tap — waiting for screen transition')
@@ -476,23 +495,18 @@ describe('Care Delivery - XCover5 Enrolment Flow', () => {
 
             await testBot.waitUntilVisible(selectors.continueButton, 20000)
         } catch (err) {
-            await dumpPageSourceOnFailure('Step 13')
+            await dumpPageSourceOnFailure('Step 11')
             throw err
         }
     })
 
-    it('Step 14 - Click Continue', async () => {
+    it('Step 12 - Click Continue', async function () {
         try {
-            // Re-confirm we are NOT still on the user
-            // dropdown/sign-in screen before proceeding —
-            // guards against a stale ContinueButton reference
-            // from an earlier screen being clicked instead of
-            // the real one on the PCS Terms page.
             const stillOnSignInScreen = await testBot.isVisible(selectors.userDropdown).catch(() => false)
             if (stillOnSignInScreen) {
-                console.error('Step 14 started but still on the user dropdown/sign-in screen — Sign In may not have registered. Dumping page source.')
-                await dumpPageSourceOnFailure('Step 14 (unexpected screen)')
-                throw new Error('Step 14: still on sign-in screen, expected PCS Terms/Continue screen')
+                console.error('Step 12 started but still on the user dropdown/sign-in screen — dumping page source')
+                await dumpPageSourceOnFailure('Step 12 (unexpected screen)')
+                throw new Error('Step 12: still on sign-in screen, expected PCS Terms/Continue screen')
             }
 
             await testBot.waitUntilVisible(selectors.continueButton, 15000)
@@ -504,10 +518,6 @@ describe('Care Delivery - XCover5 Enrolment Flow', () => {
                 console.warn('hideKeyboard failed or keyboard already hidden:', kbErr)
             }
 
-            // Re-fetch the Continue button element fresh right
-            // before clicking, rather than reusing whatever
-            // waitUntilVisible found — avoids acting on a
-            // stale element reference from a prior screen.
             const freshContinueBtn = await $(
                 '//android.widget.Button[@resource-id="ContinueButton"]'
             )
@@ -556,12 +566,12 @@ describe('Care Delivery - XCover5 Enrolment Flow', () => {
 
             await testBot.waitUntilVisible(selectors.passwordField, 20000)
         } catch (err) {
-            await dumpPageSourceOnFailure('Step 14')
+            await dumpPageSourceOnFailure('Step 12')
             throw err
         }
     })
 
-    it('Step 15 - Enter password and click Login', async () => {
+    it('Step 13 - Enter password and click Login', async function () {
         try {
             await testBot.click(selectors.passwordField)
             await driver.pause(500)
@@ -592,12 +602,12 @@ describe('Care Delivery - XCover5 Enrolment Flow', () => {
 
             await testBot.waitUntilVisible(selectors.kerrHouseServiceUsers, postLoginWait)
         } catch (err) {
-            await dumpPageSourceOnFailure('Step 15')
+            await dumpPageSourceOnFailure('Step 13')
             throw err
         }
     })
 
-    it('Step 16 - Confirm Kerr House / Service Users community and click Start Work', async () => {
+    it('Step 14 - Confirm Kerr House / Service Users community and click Start Work', async function () {
         try {
             await testBot.waitUntilVisible(selectors.kerrHouseServiceUsers, 10000)
 
@@ -607,7 +617,11 @@ describe('Care Delivery - XCover5 Enrolment Flow', () => {
             const alreadyEnabled = await startBtn.isEnabled().catch(() => false)
 
             if (!alreadyEnabled) {
-                await testBot.click(selectors.kerrHouseServiceUsers)
+                // NB: "Kerr House / Service Users" is the target
+                // community — do NOT tap "South Wing" or
+                // "Training", which are separate, similarly
+                // named options on this same screen.
+                await testBot.click(selectors.kerrHouseServiceUsersRow)
                 await driver.pause(1000)
                 await startBtn.waitForEnabled({ timeout: 10000 }).catch(() => {
                     console.warn('Start Work still disabled after community selection')
@@ -619,7 +633,7 @@ describe('Care Delivery - XCover5 Enrolment Flow', () => {
             await testBot.waitUntilVisible(selectors.startWorkButton, 10000)
             await testBot.click(selectors.startWorkButton)
         } catch (err) {
-            await dumpPageSourceOnFailure('Step 16')
+            await dumpPageSourceOnFailure('Step 14')
             throw err
         }
     })
