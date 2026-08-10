@@ -8,7 +8,7 @@ import { TestBotElement } from '../../TestBot/TestBotElement'
 // ─────────────────────────────────────────────
 const isLocal = process.env.RUN_MODE === 'local'
 const localAppPackage = process.env.LOCAL_APP_PACKAGE || 'com.personcentredsoftware.care.delivery'
-console.log(`▶ Running in ${isLocal ? 'LOCAL PHYSICAL DEVICE' : 'BROWSERSTACK CLOUD'} mode`)
+console.log(`Running in ${isLocal ? 'LOCAL PHYSICAL DEVICE' : 'BROWSERSTACK CLOUD'} mode`)
 
 // ─────────────────────────────────────────────
 // Test Data
@@ -20,7 +20,8 @@ const LOCATION = 'Kerr House'
 const USER = 'Akhila Nethi'
 
 // ─────────────────────────────────────────────
-// Selectors — freshly provided, exact locators
+// Selectors — built directly from the provided
+// locator list, in the order given
 // ─────────────────────────────────────────────
 const selectors = {
     infoButton: {
@@ -53,31 +54,22 @@ const selectors = {
         ),
     } as TestBotElement,
 
-    cancelButton: {
-        android: AndroidLocatorBuilder.xpath(
-            '//android.widget.Button[@resource-id="android:id/button2"]'
-        ),
-        ios: iOSLocatorBuilder.id('Cancel'),
-    } as TestBotElement,
-
-    // NB: This is the button that appears AFTER selecting
-    // region — it triggers the enrolment/identity flow.
-    // Confirmed as LoginButton resource-id in this locator
-    // set.
-    enrollTriggerButton: {
+    // "click enrol device button" — this is the button that
+    // appears after region selection to trigger the identity
+    // enrolment flow (resource-id is LoginButton per the
+    // provided locator).
+    clickEnrollDeviceButton: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/LoginButton"]'
         ),
         ios: iOSLocatorBuilder.id('LoginButton'),
     } as TestBotElement,
 
-    // Username field lives inside a WebView on the
-    // identity page.
-    usernameFieldWebView: {
+    usernameField: {
         android: AndroidLocatorBuilder.xpath(
-            '//android.webkit.WebView'
+            '//android.widget.EditText[@resource-id="Username"]'
         ),
-        ios: iOSLocatorBuilder.xpath('//XCUIElementTypeWebView'),
+        ios: iOSLocatorBuilder.id('Username'),
     } as TestBotElement,
 
     nextButton: {
@@ -108,13 +100,20 @@ const selectors = {
         ios: iOSLocatorBuilder.id('LoginButton'),
     } as TestBotElement,
 
-    // Organisation dropdown — confirmed as an ImageView
-    // (not EditText) in this locator set.
     organisationDropdown: {
         android: AndroidLocatorBuilder.xpath(
-            '//android.view.ViewGroup[@resource-id="com.personcentredsoftware.care.delivery:id/EnrollUpdatePage"]/android.view.ViewGroup/android.view.ViewGroup/android.widget.ScrollView/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup[4]/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup/android.widget.ImageView'
+            '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/OrganisationPicker"]'
         ),
         ios: iOSLocatorBuilder.id('OrganisationPicker'),
+    } as TestBotElement,
+
+    organisationOptionPersonCentredSoftware: {
+        android: AndroidLocatorBuilder.xpath(
+            `//android.widget.TextView[@resource-id="android:id/text1" and @text="${ORGANISATION}"]`
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            `//XCUIElementTypePickerWheel[@value="${ORGANISATION}"]`
+        ),
     } as TestBotElement,
 
     locationDropdown: {
@@ -122,6 +121,15 @@ const selectors = {
             '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/LocationPicker"]'
         ),
         ios: iOSLocatorBuilder.id('LocationPicker'),
+    } as TestBotElement,
+
+    optionKerrHouse: {
+        android: AndroidLocatorBuilder.xpath(
+            `//android.widget.TextView[@resource-id="android:id/text1" and @text="${LOCATION}"]`
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            `//XCUIElementTypePickerWheel[@value="${LOCATION}"]`
+        ),
     } as TestBotElement,
 
     enrolButton: {
@@ -138,28 +146,20 @@ const selectors = {
         ios: iOSLocatorBuilder.id('LogoutButton'),
     } as TestBotElement,
 
-    locationPickerLogin: {
-        android: AndroidLocatorBuilder.xpath(
-            '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/LocationPicker"]'
-        ),
-        ios: iOSLocatorBuilder.id('LocationPicker'),
-    } as TestBotElement,
-
-    // NB: Positional xpath as provided — this is the
-    // clickable username/user dropdown row on the login
-    // (LogonStartPage) screen.
-    userDropdownRow: {
-        android: AndroidLocatorBuilder.xpath(
-            '(//android.view.ViewGroup[@resource-id="com.personcentredsoftware.care.delivery:id/LogonStartPage"])[2]/android.view.ViewGroup[2]/android.view.ViewGroup/android.view.ViewGroup[3]/android.view.ViewGroup/android.view.ViewGroup'
-        ),
-        ios: iOSLocatorBuilder.id('UserPicker'),
-    } as TestBotElement,
-
     userDropdown: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/UserPicker"]'
         ),
         ios: iOSLocatorBuilder.id('UserPicker'),
+    } as TestBotElement,
+
+    optionAkhilaNethi: {
+        android: AndroidLocatorBuilder.xpath(
+            `//android.widget.TextView[@resource-id="android:id/text1" and @text="${USER}"]`
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            `//XCUIElementTypePickerWheel[@value="${USER}"]`
+        ),
     } as TestBotElement,
 
     signInButton: {
@@ -169,12 +169,9 @@ const selectors = {
         ios: iOSLocatorBuilder.id('SignInButton'),
     } as TestBotElement,
 
-    // Community row (RecyclerView item 3) for
-    // "Kerr House / Service Users" on the login
-    // communities page (LogonCommunitiesPage).
-    kerrHouseServiceUsersRow: {
+    kerrHouseServiceUsers: {
         android: AndroidLocatorBuilder.xpath(
-            '//android.view.ViewGroup[@resource-id="com.personcentredsoftware.care.delivery:id/LogonCommunitiesPage"]/android.view.ViewGroup/android.view.ViewGroup/androidx.recyclerview.widget.RecyclerView/android.view.ViewGroup[3]/android.view.ViewGroup/android.view.ViewGroup'
+            '//android.widget.TextView[@text="Kerr House / Service Users"]'
         ),
         ios: iOSLocatorBuilder.xpath(
             '//XCUIElementTypeStaticText[@name="Kerr House / Service Users"]'
@@ -189,23 +186,10 @@ const selectors = {
     } as TestBotElement,
 }
 
-function pickerOption(text: string): TestBotElement {
-    return {
-        android: AndroidLocatorBuilder.xpath(
-            `//android.widget.TextView[@resource-id="android:id/text1" and @text="${text}"]`
-        ),
-        ios: iOSLocatorBuilder.xpath(
-            `//XCUIElementTypePickerWheel[@value="${text}"]`
-        ),
-    } as TestBotElement
-}
-
 // ─────────────────────────────────────────────
-// Helper — wraps any promise with a hard timeout,
-// so a stalled Appium command (e.g. findElements
-// hanging on a frozen UI thread) fails fast with a
-// clear error instead of hanging indefinitely and
-// silently consuming the whole test run.
+// Helper — wraps a promise with a hard timeout so
+// a stalled Appium command fails fast with a clear
+// error instead of hanging indefinitely.
 // ─────────────────────────────────────────────
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
     return Promise.race([
@@ -217,162 +201,51 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 }
 
 // ─────────────────────────────────────────────
-// Helper — robust picker selection with scroll
-// fallback and exact-match verification. Every
-// Appium call is wrapped with withTimeout so a
-// stalled command fails fast (8s) instead of
-// hanging indefinitely, since a genuinely frozen
-// UI thread has been observed to hang Appium
-// commands for minutes with no response.
+// Helper — dump page source safely, without
+// throwing if the session itself is dead.
 // ─────────────────────────────────────────────
-async function selectPickerOptionRobust(value: string): Promise<void> {
-    const option = pickerOption(value)
-
+async function dumpPageSourceOnFailure(stepLabel: string) {
+    console.error(`Failure at ${stepLabel} — dumping page source`)
     try {
-        await withTimeout(testBot.waitUntilVisible(option, 5000), 8000, `waitUntilVisible("${value}")`)
-        await withTimeout(testBot.click(option), 8000, `click("${value}")`)
-        console.log(`Selected "${value}" directly`)
-        return
-    } catch (err) {
-        console.warn(`Direct selection of "${value}" failed (${err instanceof Error ? err.message : err}), trying scroll fallback`)
-    }
-
-    try {
-        const scrolled = await withTimeout(
-            $(
-                'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
-                `.scrollIntoView(new UiSelector().textMatches("^${value}$"))`
-            ),
-            8000,
-            `UiScrollable lookup ("${value}")`
-        )
-        if (await withTimeout(scrolled.isExisting(), 5000, `isExisting("${value}")`)) {
-            await withTimeout(scrolled.click(), 8000, `scrolled.click("${value}")`)
-            console.log(`Selected "${value}" via UiScrollable scroll (exact match)`)
-            return
-        }
-    } catch (err) {
-        console.warn(`UiScrollable fallback for "${value}" failed (${err instanceof Error ? err.message : err})`)
-    }
-
-    console.error(`Could not select "${value}" — checking session health before dumping page source`)
-
-    // If the session itself is dead/hung, getPageSource will
-    // also hang or fail — timeout-wrap it too so we always
-    // get a clear final error either way.
-    try {
-        const pageSource = await withTimeout(driver.getPageSource(), 10000, 'getPageSource (final diagnostic)')
-        console.log(`─────────── PAGE SOURCE: PICKER "${value}" ───────────`)
+        const pageSource = await withTimeout(driver.getPageSource(), 10000, `getPageSource (${stepLabel})`)
+        console.log(`─────────── PAGE SOURCE: ${stepLabel} ───────────`)
         console.log(pageSource)
         console.log('─────────────────────────────────────────────')
     } catch (srcErr) {
         console.error(
-            `getPageSource ALSO failed/timed out (${srcErr instanceof Error ? srcErr.message : srcErr}) — ` +
-            'this strongly suggests the Appium session or UI thread is genuinely hung, not just a missing locator. ' +
-            'Consider restarting the Appium server and the app on device.'
+            `getPageSource ALSO failed (${srcErr instanceof Error ? srcErr.message : srcErr}) — ` +
+            'session likely dead. Consider restarting Appium and the app on device.'
         )
     }
-    throw new Error(`Could not select picker option "${value}"`)
 }
 
 // ─────────────────────────────────────────────
-// Helper — submit username on the identity WebView
-// page. Tries performEditorAction first, falls back
-// to a visible Next/Continue tap.
+// Suite — XCover5 Enrolment Flow
 // ─────────────────────────────────────────────
-async function submitUsername(): Promise<void> {
-    let submitted = false
+describe('Care Delivery - XCover5 Enrolment Flow', () => {
 
-    try {
-        await driver.execute('mobile: performEditorAction', { action: 'next' })
-        submitted = true
-        console.log('Submitted via performEditorAction: next')
-    } catch (err) {
-        console.warn('performEditorAction "next" failed:', err)
-    }
-
-    if (!submitted) {
-        try {
-            const nextEl = await $(
-                '//android.widget.Button[@resource-id="NextButton"]'
-            )
-            if (await nextEl.isExisting()) {
-                await nextEl.click()
-                submitted = true
-                console.log('Submitted by tapping NextButton directly')
-            }
-        } catch (err) {
-            console.warn('Direct NextButton tap failed:', err)
-        }
-    }
-
-    if (!submitted) {
-        console.error('Could not submit username with any method')
-    }
-}
-
-// ─────────────────────────────────────────────
-// Device state flag — set by Step 0 below, read
-// by every enrolment step after it. If the device
-// is already enrolled ("Welcome Back" login screen
-// appears instead of the fresh Welcome screen with
-// the region dropdown), enrolment Steps 1-9 are
-// skipped automatically and the suite jumps
-// straight to the login flow (Step 10.1 onward),
-// which is what the "Welcome Back" screen actually
-// needs.
-// ─────────────────────────────────────────────
-let deviceAlreadyEnrolled = false
-
-// ─────────────────────────────────────────────
-// Suite — Enrolment & Login Flow
-// ─────────────────────────────────────────────
-describe('Care Delivery - Full Enrolment & Login Flow', () => {
-
-    it('Step 0 - Detect whether device shows fresh Welcome screen or already-enrolled Welcome Back screen', async () => {
+    it('Step 1 - App opens to Welcome screen with region dropdown', async () => {
         await driver.pause(3000)
-
-        const regionDropdownVisible = await testBot.isVisible(selectors.regionDropdown).catch(() => false)
-        const loginLocationVisible = await testBot.isVisible(selectors.locationPickerLogin).catch(() => false)
-
-        if (regionDropdownVisible) {
-            deviceAlreadyEnrolled = false
-            console.log('Detected FRESH Welcome screen (region dropdown present) — will run full enrolment flow')
-        } else if (loginLocationVisible) {
-            deviceAlreadyEnrolled = true
-            console.log('Detected "Welcome Back" screen (device already enrolled) — will SKIP enrolment steps 1-9 and go straight to login')
-        } else {
-            console.warn('Could not confidently detect screen state — dumping page source, defaulting to attempt full enrolment flow')
-            try {
-                const pageSource = await driver.getPageSource()
-                console.log('─────────── PAGE SOURCE AT STEP 0 ───────────')
-                console.log(pageSource)
-                console.log('──────────────────────────────────────────')
-            } catch (srcErr) {
-                console.warn('getPageSource failed:', srcErr)
-            }
-            deviceAlreadyEnrolled = false
+        try {
+            await testBot.waitUntilVisible(selectors.regionDropdown, 15000)
+            await testBot.waitUntilVisible(selectors.enrollDeviceButton, 5000)
+        } catch (err) {
+            await dumpPageSourceOnFailure('Step 1')
+            throw err
         }
     })
 
-    it('Step 1 - App opens to Welcome screen with region dropdown and disabled Enrol button', async function () {
-        if (deviceAlreadyEnrolled) { console.log('Skipping Step 1 — device already enrolled'); this.skip(); return }
-        await testBot.waitUntilVisible(selectors.regionDropdown, 15000)
-        await testBot.waitUntilVisible(selectors.enrollDeviceButton, 5000)
-        const enrolBtn = await $(
-            '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/EnrollDeviceButton"]'
-        )
-        const isEnabled = await enrolBtn.isEnabled()
-        expect(isEnabled).toBe(false)
-    })
-
-    it('Step 2 - Select United Kingdom and verify Enrol button becomes enabled', async function () {
-        if (deviceAlreadyEnrolled) { console.log('Skipping Step 2 — device already enrolled'); this.skip(); return }
+    it('Step 2 - Select region dropdown and choose United Kingdom', async () => {
         await testBot.click(selectors.regionDropdown)
         await driver.pause(1000)
-        await testBot.waitUntilVisible(selectors.optionUnitedKingdom, 10000)
-        await testBot.click(selectors.optionUnitedKingdom)
-        await driver.pause(1000)
+        try {
+            await testBot.waitUntilVisible(selectors.optionUnitedKingdom, 10000)
+            await testBot.click(selectors.optionUnitedKingdom)
+            await driver.pause(1000)
+        } catch (err) {
+            await dumpPageSourceOnFailure('Step 2')
+            throw err
+        }
 
         const enrolBtn = await $(
             '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/EnrollDeviceButton"]'
@@ -381,125 +254,114 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         expect(isEnabled).toBe(true)
     })
 
-    it('Step 3 - Click Enrol device and land on Username page', async function () {
-        if (deviceAlreadyEnrolled) { console.log('Skipping Step 3 — device already enrolled'); this.skip(); return }
+    it('Step 3 - Click Enrol device button', async () => {
         await testBot.click(selectors.enrollDeviceButton)
         await driver.pause(isLocal ? 3000 : 5000)
+    })
 
+    it('Step 4 - Click the Login button to proceed to identity flow', async () => {
         try {
-            await testBot.waitUntilVisible(selectors.usernameFieldWebView, 20000)
+            await testBot.waitUntilVisible(selectors.clickEnrollDeviceButton, 15000)
+            await testBot.click(selectors.clickEnrollDeviceButton)
+            await driver.pause(2000)
         } catch (err) {
-            console.error('Username WebView not found — dumping page source')
-            try {
-                const pageSource = await driver.getPageSource()
-                console.log('─────────── PAGE SOURCE AT STEP 3 ───────────')
-                console.log(pageSource)
-                console.log('──────────────────────────────────────────')
-            } catch (srcErr) {
-                console.warn('getPageSource failed:', srcErr)
-            }
+            await dumpPageSourceOnFailure('Step 4')
             throw err
         }
     })
 
-    it('Step 4 - Enter username and navigate to PCS Terms page', async function () {
-        if (deviceAlreadyEnrolled) { console.log('Skipping Step 4 — device already enrolled'); this.skip(); return }
-        // NB: the username input is inside a WebView. Tap the
-        // WebView area to focus, then type and submit.
-        await testBot.click(selectors.usernameFieldWebView)
-        await driver.pause(500)
-        await driver.keys(USERNAME.split(''))
-        await driver.pause(500)
+    it('Step 5 - Enter username and click Next', async () => {
+        try {
+            await testBot.waitUntilVisible(selectors.usernameField, 20000)
+            await testBot.click(selectors.usernameField)
+            await driver.pause(500)
+            await testBot.enterText(selectors.usernameField, USERNAME, false)
+            await driver.pause(500)
 
-        await submitUsername()
+            await testBot.waitUntilVisible(selectors.nextButton, 10000)
+            await testBot.click(selectors.nextButton)
+            await driver.pause(2000)
+        } catch (err) {
+            await dumpPageSourceOnFailure('Step 5')
+            throw err
+        }
+    })
 
-        await driver.pause(isLocal ? 2000 : 3000)
-
+    it('Step 6 - Click Continue on the PCS Terms page', async () => {
         try {
             await testBot.waitUntilVisible(selectors.continueButton, 20000)
+            await testBot.click(selectors.continueButton)
+            await driver.pause(2000)
         } catch (err) {
-            console.error('Continue button not found — dumping page source')
-            try {
-                const pageSource = await driver.getPageSource()
-                console.log('─────────── PAGE SOURCE AT STEP 4 ───────────')
-                console.log(pageSource)
-                console.log('──────────────────────────────────────────')
-            } catch (srcErr) {
-                console.warn('getPageSource failed:', srcErr)
-            }
+            await dumpPageSourceOnFailure('Step 6')
             throw err
         }
     })
 
-    it('Step 5 - Click Continue and land on Password page', async function () {
-        if (deviceAlreadyEnrolled) { console.log('Skipping Step 5 — device already enrolled'); this.skip(); return }
-        await testBot.click(selectors.continueButton)
-        await driver.pause(2000)
-        await testBot.waitUntilVisible(selectors.passwordField, 20000)
+    it('Step 7 - Enter password and click Login', async () => {
+        try {
+            await testBot.waitUntilVisible(selectors.passwordField, 20000)
+            await testBot.click(selectors.passwordField)
+            await driver.pause(500)
+            await testBot.enterText(selectors.passwordField, PASSWORD, false)
+            await driver.pause(500)
+
+            try {
+                await driver.hideKeyboard()
+                await driver.pause(1000)
+            } catch (kbErr) {
+                console.warn('hideKeyboard failed or keyboard already hidden:', kbErr)
+            }
+
+            await testBot.waitUntilVisible(selectors.identityLoginButton, 10000)
+            await testBot.click(selectors.identityLoginButton)
+
+            // Identity auth may briefly background the app on
+            // physical device — give it time and force it back
+            // to foreground before checking for the enrol page.
+            const postLoginWait = isLocal ? 120000 : 20000
+            await driver.pause(isLocal ? 5000 : 3000)
+
+            if (isLocal) {
+                try {
+                    await driver.activateApp(localAppPackage)
+                    await driver.pause(2000)
+                } catch (e) {
+                    console.warn('activateApp after login failed (app may already be foreground):', e)
+                }
+            }
+
+            await testBot.waitUntilVisible(selectors.organisationDropdown, postLoginWait)
+        } catch (err) {
+            await dumpPageSourceOnFailure('Step 7')
+            throw err
+        }
     })
 
-    it('Step 6 - Enter password and navigate to Enrol page', async function () {
-        if (deviceAlreadyEnrolled) { console.log('Skipping Step 6 — device already enrolled'); this.skip(); return }
-        await testBot.click(selectors.passwordField)
-        await driver.pause(500)
-        await testBot.enterText(selectors.passwordField, PASSWORD, false)
-        await driver.pause(500)
-
+    it('Step 8 - Select Organisation: Person Centred Software', async () => {
         try {
-            await driver.hideKeyboard()
+            await testBot.click(selectors.organisationDropdown)
+            await driver.pause(1000)
+            await testBot.waitUntilVisible(selectors.organisationOptionPersonCentredSoftware, 10000)
+            await testBot.click(selectors.organisationOptionPersonCentredSoftware)
             await driver.pause(1000)
         } catch (err) {
-            console.warn('hideKeyboard failed or keyboard already hidden:', err)
-        }
-
-        await testBot.waitUntilVisible(selectors.identityLoginButton, 10000)
-        await testBot.click(selectors.identityLoginButton)
-
-        // MSAL / identity auth may briefly background the
-        // app on physical device — give it time and force
-        // it back to foreground before checking for the
-        // enrolment page.
-        const postLoginWait = isLocal ? 120000 : 20000
-        await driver.pause(isLocal ? 5000 : 3000)
-
-        if (isLocal) {
-            try {
-                await driver.activateApp(localAppPackage)
-                await driver.pause(2000)
-            } catch (e) {
-                console.warn('activateApp after identity login failed (app may already be foreground):', e)
-            }
-        }
-
-        try {
-            await testBot.waitUntilVisible(selectors.organisationDropdown, postLoginWait)
-            await testBot.waitUntilVisible(selectors.locationDropdown, 5000)
-            await testBot.waitUntilVisible(selectors.enrolButton, 5000)
-        } catch (err) {
-            console.error('Enrol page did not load after clicking Login — dumping page source')
-            try {
-                const pageSource = await driver.getPageSource()
-                console.log('─────────── PAGE SOURCE AT STEP 6 (after click) ───────────')
-                console.log(pageSource)
-                console.log('───────────────────────────────────────────────────────')
-            } catch (srcErr) {
-                console.warn('getPageSource failed (session may be dead):', srcErr)
-            }
+            await dumpPageSourceOnFailure('Step 8')
             throw err
         }
     })
 
-    it('Step 7 - Select Organisation and Location; verify Enrol button is enabled', async function () {
-        if (deviceAlreadyEnrolled) { console.log('Skipping Step 7 — device already enrolled'); this.skip(); return }
-        await testBot.click(selectors.organisationDropdown)
-        await driver.pause(1000)
-        await selectPickerOptionRobust(ORGANISATION)
-        await driver.pause(1000)
-
-        await testBot.click(selectors.locationDropdown)
-        await driver.pause(1000)
-        await selectPickerOptionRobust(LOCATION)
-        await driver.pause(1000)
+    it('Step 9 - Select Location: Kerr House', async () => {
+        try {
+            await testBot.click(selectors.locationDropdown)
+            await driver.pause(1000)
+            await testBot.waitUntilVisible(selectors.optionKerrHouse, 10000)
+            await testBot.click(selectors.optionKerrHouse)
+            await driver.pause(1000)
+        } catch (err) {
+            await dumpPageSourceOnFailure('Step 9')
+            throw err
+        }
 
         const enrolBtn = await $(
             '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/EnrollButton"]'
@@ -508,117 +370,43 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         expect(isEnabled).toBe(true)
     })
 
-    it('Step 8 - Click Enrol and see Device Enrolled page with Logout button', async function () {
-        if (deviceAlreadyEnrolled) { console.log('Skipping Step 8 — device already enrolled'); this.skip(); return }
-        await testBot.click(selectors.enrolButton)
-        await testBot.waitUntilVisible(selectors.logoutButton, 30000)
-    })
-
-    it('Step 9 - Click Log Out and land on Log In page', async function () {
-        if (deviceAlreadyEnrolled) { console.log('Skipping Step 9 — device already enrolled'); this.skip(); return }
-        await testBot.click(selectors.logoutButton)
-        await driver.pause(2000)
-        await testBot.waitUntilVisible(selectors.locationPickerLogin, 15000)
-    })
-
-    it('Step 10.1 - App opens on Username selection screen; Sign In button is disabled', async () => {
-        await testBot.waitUntilVisible(selectors.userDropdownRow, 10000)
-        await testBot.waitUntilVisible(selectors.signInButton, 5000)
-        const signInBtn = await $(
-            '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/SignInButton"]'
-        )
-        const isEnabled = await signInBtn.isEnabled()
-        expect(isEnabled).toBe(false)
-    })
-
-    it('Step 10.2 - Location field is populated with Kerr House', async () => {
-        const locationEl = await $(
-            '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/LocationPicker"]'
-        )
-        let locationValue = await locationEl.getText()
-
-        if (!locationValue.includes(LOCATION)) {
-            await testBot.click(selectors.locationPickerLogin)
-            await driver.pause(1000)
-            await selectPickerOptionRobust(LOCATION)
-            await driver.pause(1000)
-
-            const refreshed = await $(
-                '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/LocationPicker"]'
-            )
-            locationValue = await refreshed.getText()
-        }
-
-        expect(locationValue).toContain(LOCATION)
-    })
-
-    it('Step 10.3 - Open user dropdown and select user', async () => {
-        // NB: The provided positional XPath for the user
-        // dropdown row (LogonStartPage[2]/...) returned zero
-        // elements on a real device run. Trying multiple
-        // fallback locators in order before dumping page
-        // source, so we can lock in the correct one for good
-        // next time this fails.
-        let opened = false
-
-        // Attempt 1: the exact positional locator as provided
+    it('Step 10 - Click Enrol', async () => {
         try {
-            await testBot.waitUntilVisible(selectors.userDropdownRow, 5000)
-            await testBot.click(selectors.userDropdownRow)
-            opened = true
-            console.log('Opened user dropdown via userDropdownRow (positional xpath)')
+            await testBot.click(selectors.enrolButton)
+            await testBot.waitUntilVisible(selectors.logoutButton, 30000)
         } catch (err) {
-            console.warn('userDropdownRow not found, trying userDropdown (EditText) fallback')
+            await dumpPageSourceOnFailure('Step 10')
+            throw err
         }
-
-        // Attempt 2: the EditText UserPicker locator
-        if (!opened) {
-            try {
-                await testBot.waitUntilVisible(selectors.userDropdown, 5000)
-                await testBot.click(selectors.userDropdown)
-                opened = true
-                console.log('Opened user dropdown via userDropdown (EditText UserPicker)')
-            } catch (err) {
-                console.warn('userDropdown (EditText) also not found')
-            }
-        }
-
-        // Attempt 3: any element containing "User" in its
-        // resource-id, as a last resort
-        if (!opened) {
-            try {
-                const anyUserField = await $(
-                    '//*[contains(@resource-id,"UserPicker") or contains(@resource-id,"User")]'
-                )
-                if (await anyUserField.isExisting()) {
-                    await anyUserField.click()
-                    opened = true
-                    console.log('Opened user dropdown via generic resource-id contains("User") match')
-                }
-            } catch (err) {
-                console.warn('Generic User field fallback also failed')
-            }
-        }
-
-        if (!opened) {
-            console.error('Could not open user dropdown with any method — dumping page source')
-            try {
-                const pageSource = await driver.getPageSource()
-                console.log('─────────── PAGE SOURCE: STEP 10.3 USER DROPDOWN NOT FOUND ───────────')
-                console.log(pageSource)
-                console.log('────────────────────────────────────────────────────────────────────')
-            } catch (srcErr) {
-                console.warn('getPageSource failed:', srcErr)
-            }
-            throw new Error('Could not open user dropdown with any locator')
-        }
-
-        await driver.pause(1000)
-        await selectPickerOptionRobust(USER)
-        await driver.pause(1000)
     })
 
-    it('Step 10.4 - Verify Sign In button becomes enabled', async () => {
+    it('Step 11 - Click Logout', async () => {
+        try {
+            await testBot.click(selectors.logoutButton)
+            await driver.pause(2000)
+            await testBot.waitUntilVisible(selectors.userDropdown, 15000)
+        } catch (err) {
+            await dumpPageSourceOnFailure('Step 11')
+            throw err
+        }
+    })
+
+    it('Step 12 - Select user: Akhila Nethi', async () => {
+        try {
+            await testBot.click(selectors.userDropdown)
+            await driver.pause(1000)
+            await withTimeout(
+                testBot.waitUntilVisible(selectors.optionAkhilaNethi, 10000),
+                12000,
+                'waitUntilVisible(Akhila Nethi)'
+            )
+            await testBot.click(selectors.optionAkhilaNethi)
+            await driver.pause(1000)
+        } catch (err) {
+            await dumpPageSourceOnFailure('Step 12')
+            throw err
+        }
+
         const signInBtn = await $(
             '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/SignInButton"]'
         )
@@ -626,71 +414,45 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         expect(isEnabled).toBe(true)
     })
 
-    it('Step 10.5 - Click Sign In and land on PCS Terms page', async () => {
-        await testBot.click(selectors.signInButton)
-        await driver.pause(3000)
+    it('Step 13 - Click Sign In', async () => {
         try {
+            await testBot.click(selectors.signInButton)
+            await driver.pause(3000)
             await testBot.waitUntilVisible(selectors.continueButton, 20000)
         } catch (err) {
-            console.error('Continue button (PCS Terms page) not found after Sign In — dumping page source')
-            try {
-                const pageSource = await driver.getPageSource()
-                console.log('─────────── PAGE SOURCE AT STEP 10.5 ───────────')
-                console.log(pageSource)
-                console.log('─────────────────────────────────────────────')
-            } catch (srcErr) {
-                console.warn('getPageSource failed (session may be dead):', srcErr)
-            }
+            await dumpPageSourceOnFailure('Step 13')
             throw err
         }
     })
 
-    it('Step 10.6 - Click Continue and land on Password page', async () => {
-        // NB: A click that "succeeds" per Appium (element
-        // found, tap sent) but produces no app response has
-        // been observed before. Try: dismiss keyboard (may be
-        // covering the button) -> tap -> retry tap -> coordinate
-        // tap as last resort -> full diagnostic dump.
-        await testBot.waitUntilVisible(selectors.continueButton, 15000)
-
+    it('Step 14 - Click Continue', async () => {
         try {
-            await driver.hideKeyboard()
-            await driver.pause(1000)
-            console.log('Keyboard dismissed before tapping Continue')
-        } catch (err) {
-            console.warn('hideKeyboard failed or keyboard already hidden:', err)
-        }
+            await testBot.waitUntilVisible(selectors.continueButton, 15000)
 
-        const continueBtn = await $(
-            '//android.widget.Button[@resource-id="ContinueButton"]'
-        )
-        const isClickable = await continueBtn.isEnabled().catch(() => false)
-        console.log(`Continue button enabled: ${isClickable}`)
-
-        await testBot.click(selectors.continueButton)
-        await driver.pause(2000)
-
-        let landedOnPassword = await testBot.isVisible(selectors.passwordField).catch(() => false)
-
-        if (!landedOnPassword) {
-            console.warn('Password page not visible after first Continue tap — retrying tap once')
             try {
+                await driver.hideKeyboard()
+                await driver.pause(1000)
+            } catch (kbErr) {
+                console.warn('hideKeyboard failed or keyboard already hidden:', kbErr)
+            }
+
+            await testBot.click(selectors.continueButton)
+            await driver.pause(2000)
+
+            let landedOnPassword = await testBot.isVisible(selectors.passwordField).catch(() => false)
+
+            if (!landedOnPassword) {
+                console.warn('Password page not visible after first Continue tap — retrying tap once')
                 await testBot.click(selectors.continueButton)
                 await driver.pause(2000)
                 landedOnPassword = await testBot.isVisible(selectors.passwordField).catch(() => false)
-            } catch (retryErr) {
-                console.warn('Retry tap on Continue failed:', retryErr)
             }
-        }
 
-        // Last resort: tap the exact pixel center of the
-        // button's bounding box via a raw pointer action,
-        // bypassing Appium's element-click resolution
-        // entirely, in case the element click is registering
-        // on the wrong coordinates or a covering view.
-        if (!landedOnPassword) {
-            console.warn('Still not on Password page — trying coordinate-based tap on Continue button')
-            try {
+            if (!landedOnPassword) {
+                console.warn('Still not on Password page — trying coordinate-based tap on Continue button')
+                const continueBtn = await $(
+                    '//android.widget.Button[@resource-id="ContinueButton"]'
+                )
                 const location = await continueBtn.getLocation()
                 const size = await continueBtn.getSize()
                 const centerX = Math.floor(location.x + size.width / 2)
@@ -705,97 +467,76 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
                     .perform()
 
                 await driver.pause(2000)
-                landedOnPassword = await testBot.isVisible(selectors.passwordField).catch(() => false)
-            } catch (coordErr) {
-                console.warn('Coordinate-based tap on Continue failed:', coordErr)
             }
-        }
 
-        if (!landedOnPassword) {
-            console.error('Password page still not visible after retry and coordinate tap — dumping page source')
-            try {
-                const pageSource = await driver.getPageSource()
-                console.log('─────────── PAGE SOURCE AT STEP 10.6 ───────────')
-                console.log(pageSource)
-                console.log('─────────────────────────────────────────────')
-            } catch (srcErr) {
-                console.error(
-                    `getPageSource ALSO failed (${srcErr instanceof Error ? srcErr.message : srcErr}) — ` +
-                    'session likely dead. Consider restarting Appium and the app on device.'
-                )
-            }
-        }
-
-        await testBot.waitUntilVisible(selectors.passwordField, 20000)
-    })
-
-    it('Step 10.7 - Enter password and click Log In', async () => {
-        await testBot.click(selectors.passwordField)
-        await driver.pause(500)
-        await testBot.enterText(selectors.passwordField, PASSWORD, false)
-        await driver.pause(500)
-
-        try {
-            await driver.hideKeyboard()
-            await driver.pause(1000)
+            await testBot.waitUntilVisible(selectors.passwordField, 20000)
         } catch (err) {
-            console.warn('hideKeyboard failed or keyboard already hidden:', err)
-        }
-
-        await testBot.waitUntilVisible(selectors.identityLoginButton, 10000)
-        await testBot.click(selectors.identityLoginButton)
-
-        const postLoginWait = isLocal ? 120000 : 20000
-        await driver.pause(isLocal ? 5000 : 3000)
-
-        if (isLocal) {
-            try {
-                await driver.activateApp(localAppPackage)
-                await driver.pause(2000)
-            } catch (e) {
-                console.warn('activateApp after login failed (app may already be foreground):', e)
-            }
-        }
-
-        try {
-            await testBot.waitUntilVisible(selectors.kerrHouseServiceUsersRow, postLoginWait)
-        } catch (err) {
-            console.error('Communities page did not load after Login — dumping page source')
-            try {
-                const pageSource = await driver.getPageSource()
-                console.log('─────────── PAGE SOURCE AT STEP 10.7 (after click) ───────────')
-                console.log(pageSource)
-                console.log('───────────────────────────────────────────────────────────')
-            } catch (srcErr) {
-                console.warn('getPageSource failed (session may be dead):', srcErr)
-            }
+            await dumpPageSourceOnFailure('Step 14')
             throw err
         }
     })
 
-    it('Step 10.8 - User is taken to Select Communities page', async () => {
-        await testBot.waitUntilVisible(selectors.kerrHouseServiceUsersRow, 10000)
+    it('Step 15 - Enter password and click Login', async () => {
+        try {
+            await testBot.click(selectors.passwordField)
+            await driver.pause(500)
+            await testBot.enterText(selectors.passwordField, PASSWORD, false)
+            await driver.pause(500)
+
+            try {
+                await driver.hideKeyboard()
+                await driver.pause(1000)
+            } catch (kbErr) {
+                console.warn('hideKeyboard failed or keyboard already hidden:', kbErr)
+            }
+
+            await testBot.waitUntilVisible(selectors.identityLoginButton, 10000)
+            await testBot.click(selectors.identityLoginButton)
+
+            const postLoginWait = isLocal ? 120000 : 20000
+            await driver.pause(isLocal ? 5000 : 3000)
+
+            if (isLocal) {
+                try {
+                    await driver.activateApp(localAppPackage)
+                    await driver.pause(2000)
+                } catch (e) {
+                    console.warn('activateApp after login failed (app may already be foreground):', e)
+                }
+            }
+
+            await testBot.waitUntilVisible(selectors.kerrHouseServiceUsers, postLoginWait)
+        } catch (err) {
+            await dumpPageSourceOnFailure('Step 15')
+            throw err
+        }
     })
 
-    it('Step 10.9 - Select Kerr House / Service Users, click Start Work and land on My Communities tab', async () => {
-        const startWorkXpath =
-            '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/StartWorkButton"]'
+    it('Step 16 - Confirm Kerr House / Service Users community and click Start Work', async () => {
+        try {
+            await testBot.waitUntilVisible(selectors.kerrHouseServiceUsers, 10000)
 
-        const startBtn = await $(startWorkXpath)
-        const alreadyEnabled = await startBtn.isEnabled().catch(() => false)
+            const startBtn = await $(
+                '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/StartWorkButton"]'
+            )
+            const alreadyEnabled = await startBtn.isEnabled().catch(() => false)
 
-        if (!alreadyEnabled) {
-            await testBot.click(selectors.kerrHouseServiceUsersRow)
-            await driver.pause(1000)
-            await startBtn.waitForEnabled({ timeout: 10000 }).catch(() => {
-                console.warn('Start Work still disabled after community selection')
-            })
-        } else {
-            console.log('Start Work already enabled — community appears pre-selected, skipping tap')
+            if (!alreadyEnabled) {
+                await testBot.click(selectors.kerrHouseServiceUsers)
+                await driver.pause(1000)
+                await startBtn.waitForEnabled({ timeout: 10000 }).catch(() => {
+                    console.warn('Start Work still disabled after community selection')
+                })
+            } else {
+                console.log('Start Work already enabled — community appears pre-selected, skipping tap')
+            }
+
+            await testBot.waitUntilVisible(selectors.startWorkButton, 10000)
+            await testBot.click(selectors.startWorkButton)
+        } catch (err) {
+            await dumpPageSourceOnFailure('Step 16')
+            throw err
         }
-
-        await testBot.waitUntilVisible(selectors.startWorkButton, 10000)
-        await testBot.click(selectors.startWorkButton)
     })
 
 })
