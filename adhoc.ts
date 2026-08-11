@@ -3,59 +3,40 @@ import { AndroidLocatorBuilder } from '../../TestBot/Locators/Android/AndroidLoc
 import { iOSLocatorBuilder } from '../../TestBot/Locators/iOS/iOSLocatorBuilder'
 import { TestBotElement } from '../../TestBot/TestBotElement'
 
-const RESIDENT_NAME_2 = 'Freya Farrow'
+const isLocal = process.env.RUN_MODE === 'local'
+console.log(`Running Adhoc Activity flow in ${isLocal ? 'LOCAL PHYSICAL DEVICE' : 'BROWSERSTACK CLOUD'} mode`)
+
+const RESIDENT_NAME = 'Freya Farrow'
 
 // ─────────────────────────────────────────────
-// Community selection selectors (confirmed exact
-// locators) — used if this flow needs to (re)select
-// a community before choosing a resident.
+// Helper — dump page source safely, without
+// throwing if the session itself is dead.
 // ─────────────────────────────────────────────
-const communitySelectors = {
-    kerrHouseServiceUsers: {
-        android: AndroidLocatorBuilder.xpath(
-            '//android.widget.TextView[@text="Kerr House / Service Users"]'
-        ),
-        ios: iOSLocatorBuilder.xpath(
-            '//XCUIElementTypeStaticText[@name="Kerr House / Service Users"]'
-        ),
-    } as TestBotElement,
-
-    kerrHouseSouthWing: {
-        android: AndroidLocatorBuilder.xpath(
-            '//android.widget.TextView[@text="Kerr House / South Wing - First Floor"]'
-        ),
-        ios: iOSLocatorBuilder.xpath(
-            '//XCUIElementTypeStaticText[@name="Kerr House / South Wing - First Floor"]'
-        ),
-    } as TestBotElement,
-
-    kerrHouseTraining: {
-        android: AndroidLocatorBuilder.xpath(
-            '//android.widget.TextView[@text="Kerr House / Training"]'
-        ),
-        ios: iOSLocatorBuilder.xpath(
-            '//XCUIElementTypeStaticText[@name="Kerr House / Training"]'
-        ),
-    } as TestBotElement,
-
-    startWorkButton: {
-        android: AndroidLocatorBuilder.xpath(
-            '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/StartWorkButton"]'
-        ),
-        ios: iOSLocatorBuilder.id('StartWorkButton'),
-    } as TestBotElement,
+async function dumpPageSourceOnFailure(stepLabel: string) {
+    console.error(`Failure at ${stepLabel} — dumping page source`)
+    try {
+        const pageSource = await driver.getPageSource()
+        console.log(`─────────── PAGE SOURCE: ${stepLabel} ───────────`)
+        console.log(pageSource)
+        console.log('─────────────────────────────────────────────')
+    } catch (srcErr) {
+        console.error(
+            `getPageSource ALSO failed (${srcErr instanceof Error ? srcErr.message : srcErr}) — ` +
+            'session likely dead. Consider restarting Appium/BrowserStack session.'
+        )
+    }
 }
 
 // ─────────────────────────────────────────────
 // Freya Farrow — Adhoc Activity Flow selectors
 // ─────────────────────────────────────────────
-const adhocActivitySelectors = {
+const adhocSelectors = {
     residentFreyaFarrow: {
         android: AndroidLocatorBuilder.xpath(
-            `//android.widget.TextView[@text="${RESIDENT_NAME_2}"]`
+            `//android.widget.TextView[@text="${RESIDENT_NAME}"]`
         ),
         ios: iOSLocatorBuilder.xpath(
-            `//XCUIElementTypeStaticText[@name="${RESIDENT_NAME_2}"]`
+            `//XCUIElementTypeStaticText[@name="${RESIDENT_NAME}"]`
         ),
     } as TestBotElement,
 
@@ -77,6 +58,7 @@ const adhocActivitySelectors = {
         ),
     } as TestBotElement,
 
+    // NB: This arrow TOGGLES open/closed — tap once only.
     expandArrow: {
         android: AndroidLocatorBuilder.xpath(
             '(//android.widget.TextView[@text=""])[1]'
@@ -113,8 +95,7 @@ const adhocActivitySelectors = {
         ),
     } as TestBotElement,
 
-    // Confirmed via screenshot — plain grid button, no
-    // slider overlap.
+    // Confirmed: plain grid button, no slider overlap.
     tenMinsOption: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.TextView[@text="10 mins"] | //android.widget.Button[@text="10 mins"]'
@@ -124,8 +105,8 @@ const adhocActivitySelectors = {
         ),
     } as TestBotElement,
 
-    // Confirmed via screenshot — button literally reads
-    // "Continue" at the bottom of the duration screen.
+    // Confirmed: literal "Continue" button at the bottom
+    // of the duration screen.
     confirmButton: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.Button[@text="Continue"]'
@@ -144,9 +125,9 @@ const adhocActivitySelectors = {
         ),
     } as TestBotElement,
 
-    // NB: Locator sent for "close" was identical to
-    // Create Records — update once the actual close
-    // button's locator is confirmed.
+    // NB: Close button locator unconfirmed — falls back to
+    // Create Records button if a dedicated close control
+    // isn't found. Update once confirmed on real screen.
     closeAfterCreateButton: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.Button[@text="Create Records"]'
@@ -168,105 +149,83 @@ const adhocActivitySelectors = {
 
 // ─────────────────────────────────────────────
 // Suite — Freya Farrow Adhoc Activity Flow
+// (assumes the app is already logged in and on
+// the My Communities page — run this after the
+// enrolment/login suite in the same session)
 // ─────────────────────────────────────────────
 describe('Care Delivery - Freya Farrow Adhoc Activity Flow', () => {
 
-    it('Step 1 - Select resident "Freya Farrow" from the community list', async () => {
+    it('Step 1 - Select resident "Freya Farrow" from the community list', async function () {
         try {
-            await testBot.waitUntilVisible(adhocActivitySelectors.residentFreyaFarrow, 20000)
-            await testBot.click(adhocActivitySelectors.residentFreyaFarrow)
+            await testBot.waitUntilVisible(adhocSelectors.residentFreyaFarrow, 20000)
+            await testBot.click(adhocSelectors.residentFreyaFarrow)
             await driver.pause(2000)
         } catch (err) {
-            console.error('Resident Freya Farrow not found — dumping page source')
-            const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 1 ───────────')
-            console.log(pageSource)
-            console.log('─────────────────────────────────────────')
+            await dumpPageSourceOnFailure('Step 1')
             throw err
         }
     })
 
-    it('Step 2 - Click Adhoc', async () => {
+    it('Step 2 - Click Adhoc', async function () {
         try {
-            await testBot.waitUntilVisible(adhocActivitySelectors.adhocButton, 15000)
-            await testBot.click(adhocActivitySelectors.adhocButton)
+            await testBot.waitUntilVisible(adhocSelectors.adhocButton, 15000)
+            await testBot.click(adhocSelectors.adhocButton)
             await driver.pause(1500)
         } catch (err) {
-            console.error('Adhoc button not found — dumping page source')
-            const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 2 ───────────')
-            console.log(pageSource)
-            console.log('─────────────────────────────────────────')
+            await dumpPageSourceOnFailure('Step 2')
             throw err
         }
     })
 
-    it('Step 3 - Select an activity from the list', async () => {
+    it('Step 3 - Select an activity from the list', async function () {
         try {
-            await testBot.waitUntilVisible(adhocActivitySelectors.activitiesListItem, 15000)
-            await testBot.click(adhocActivitySelectors.activitiesListItem)
+            await testBot.waitUntilVisible(adhocSelectors.activitiesListItem, 15000)
+            await testBot.click(adhocSelectors.activitiesListItem)
             await driver.pause(1500)
         } catch (err) {
-            console.error('Activities list item not found — dumping page source')
-            const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 3 ───────────')
-            console.log(pageSource)
-            console.log('─────────────────────────────────────────')
+            await dumpPageSourceOnFailure('Step 3')
             throw err
         }
     })
 
-    it('Step 4 - Tap arrow to expand (toggle — tap once only)', async () => {
+    it('Step 4 - Tap arrow to expand (toggle — tap once only)', async function () {
         try {
-            await testBot.waitUntilVisible(adhocActivitySelectors.expandArrow, 15000)
-            await testBot.click(adhocActivitySelectors.expandArrow)
+            await testBot.waitUntilVisible(adhocSelectors.expandArrow, 15000)
+            await testBot.click(adhocSelectors.expandArrow)
             await driver.pause(1500)
         } catch (err) {
-            console.error('Expand arrow not found — dumping page source')
-            const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 4 ───────────')
-            console.log(pageSource)
-            console.log('─────────────────────────────────────────')
+            await dumpPageSourceOnFailure('Step 4')
             throw err
         }
     })
 
-    it('Step 5 - Select the art', async () => {
+    it('Step 5 - Select the art', async function () {
         try {
-            await testBot.waitUntilVisible(adhocActivitySelectors.selectArtImage, 15000)
-            await testBot.click(adhocActivitySelectors.selectArtImage)
+            await testBot.waitUntilVisible(adhocSelectors.selectArtImage, 15000)
+            await testBot.click(adhocSelectors.selectArtImage)
             await driver.pause(1500)
         } catch (err) {
-            console.error('Select art image not found — dumping page source')
-            const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 5 ───────────')
-            console.log(pageSource)
-            console.log('─────────────────────────────────────────')
+            await dumpPageSourceOnFailure('Step 5')
             throw err
         }
     })
 
-    it('Step 6 - Click Next and verify duration screen "How long did this care take?" loads', async () => {
+    it('Step 6 - Click Next and verify duration screen loads', async function () {
         try {
-            await testBot.waitUntilVisible(adhocActivitySelectors.nextButton, 15000)
-            await testBot.click(adhocActivitySelectors.nextButton)
+            await testBot.waitUntilVisible(adhocSelectors.nextButton, 15000)
+            await testBot.click(adhocSelectors.nextButton)
             await driver.pause(1500)
-
-            await testBot.waitUntilVisible(adhocActivitySelectors.durationScreenTitle, 15000)
+            await testBot.waitUntilVisible(adhocSelectors.durationScreenTitle, 15000)
             console.log('Duration screen loaded: "How long did this care take?"')
         } catch (err) {
-            console.error('Next button or duration screen title not found — dumping page source')
-            const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 6 ───────────')
-            console.log(pageSource)
-            console.log('─────────────────────────────────────────')
+            await dumpPageSourceOnFailure('Step 6')
             throw err
         }
     })
 
-    it('Step 7 - Scroll down and select "10 mins" duration', async () => {
+    it('Step 7 - Scroll down and select "10 mins" duration', async function () {
         try {
-            await testBot.waitUntilVisible(adhocActivitySelectors.durationScreenTitle, 15000)
+            await testBot.waitUntilVisible(adhocSelectors.durationScreenTitle, 15000)
 
             const tenMinsXpath =
                 '//android.widget.TextView[@text="10 mins"] | //android.widget.Button[@text="10 mins"]'
@@ -299,73 +258,96 @@ describe('Care Delivery - Freya Farrow Adhoc Activity Flow', () => {
             await tenMinsEl.click()
             console.log('Clicked "10 mins" duration button')
             await driver.pause(1000)
-
         } catch (err) {
-            console.error('10 mins option not found or click failed — dumping page source')
-            const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 7 ───────────')
-            console.log(pageSource)
-            console.log('─────────────────────────────────────────')
+            await dumpPageSourceOnFailure('Step 7')
             throw err
         }
     })
 
-    it('Step 8 - Click Continue button at the bottom', async () => {
+    it('Step 8 - Click Continue button at the bottom', async function () {
         try {
-            await testBot.waitUntilVisible(adhocActivitySelectors.confirmButton, 15000)
-            await testBot.click(adhocActivitySelectors.confirmButton)
+            await testBot.waitUntilVisible(adhocSelectors.confirmButton, 15000)
+
+            try {
+                await driver.hideKeyboard()
+                await driver.pause(500)
+            } catch (kbErr) {
+                console.warn('hideKeyboard failed or keyboard already hidden:', kbErr)
+            }
+
+            const freshContinueBtn = await $(
+                '//android.widget.Button[@text="Continue"]'
+            )
+            await freshContinueBtn.click()
             await driver.pause(1500)
+
+            let advanced = await testBot.isVisible(adhocSelectors.createRecordsButton).catch(() => false)
+
+            if (!advanced) {
+                console.warn('Create Records not visible after Continue tap — retrying once')
+                const retryBtn = await $('//android.widget.Button[@text="Continue"]')
+                if (await retryBtn.isExisting()) {
+                    await retryBtn.click()
+                    await driver.pause(1500)
+                    advanced = await testBot.isVisible(adhocSelectors.createRecordsButton).catch(() => false)
+                }
+            }
+
+            if (!advanced) {
+                console.warn('Still stuck — trying coordinate-based tap on Continue')
+                const continueBtn = await $('//android.widget.Button[@text="Continue"]')
+                if (await continueBtn.isExisting()) {
+                    const location = await continueBtn.getLocation()
+                    const size = await continueBtn.getSize()
+                    const centerX = Math.floor(location.x + size.width / 2)
+                    const centerY = Math.floor(location.y + size.height / 2)
+                    console.log(`Tapping Continue at coordinates: ${centerX}, ${centerY}`)
+
+                    await driver.action('pointer', { parameters: { pointerType: 'touch' } })
+                        .move({ duration: 0, x: centerX, y: centerY })
+                        .down({ button: 0 })
+                        .pause(100)
+                        .up({ button: 0 })
+                        .perform()
+
+                    await driver.pause(1500)
+                }
+            }
         } catch (err) {
-            console.error('Continue button not found — dumping page source')
-            const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 8 ───────────')
-            console.log(pageSource)
-            console.log('─────────────────────────────────────────')
+            await dumpPageSourceOnFailure('Step 8')
             throw err
         }
     })
 
-    it('Step 9 - Click Create Records', async () => {
+    it('Step 9 - Click Create Records', async function () {
         try {
-            await testBot.waitUntilVisible(adhocActivitySelectors.createRecordsButton, 15000)
-            await testBot.click(adhocActivitySelectors.createRecordsButton)
+            await testBot.waitUntilVisible(adhocSelectors.createRecordsButton, 15000)
+            await testBot.click(adhocSelectors.createRecordsButton)
             await driver.pause(2000)
         } catch (err) {
-            console.error('Create Records button not found — dumping page source')
-            const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 9 ───────────')
-            console.log(pageSource)
-            console.log('─────────────────────────────────────────')
+            await dumpPageSourceOnFailure('Step 9')
             throw err
         }
     })
 
-    it('Step 10 - Click Close', async () => {
+    it('Step 10 - Click Close', async function () {
         try {
-            await testBot.waitUntilVisible(adhocActivitySelectors.closeAfterCreateButton, 15000)
-            await testBot.click(adhocActivitySelectors.closeAfterCreateButton)
+            await testBot.waitUntilVisible(adhocSelectors.closeAfterCreateButton, 15000)
+            await testBot.click(adhocSelectors.closeAfterCreateButton)
             await driver.pause(1500)
         } catch (err) {
-            console.error('Close button not found — dumping page source')
-            const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 10 ───────────')
-            console.log(pageSource)
-            console.log('─────────────────────────────────────────')
+            await dumpPageSourceOnFailure('Step 10')
             throw err
         }
     })
 
-    it('Step 11 - Click on "Earlier" tab', async () => {
+    it('Step 11 - Click on "Earlier" tab', async function () {
         try {
-            await testBot.waitUntilVisible(adhocActivitySelectors.earlierTab, 15000)
-            await testBot.click(adhocActivitySelectors.earlierTab)
+            await testBot.waitUntilVisible(adhocSelectors.earlierTab, 15000)
+            await testBot.click(adhocSelectors.earlierTab)
             await driver.pause(1500)
         } catch (err) {
-            console.error('Earlier tab not found — dumping page source')
-            const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 11 ───────────')
-            console.log(pageSource)
-            console.log('─────────────────────────────────────────')
+            await dumpPageSourceOnFailure('Step 11')
             throw err
         }
     })
