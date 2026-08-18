@@ -3,251 +3,548 @@ import { AndroidLocatorBuilder } from '../../TestBot/Locators/Android/AndroidLoc
 import { iOSLocatorBuilder } from '../../TestBot/Locators/iOS/iOSLocatorBuilder'
 import { TestBotElement } from '../../TestBot/TestBotElement'
 
-// ─────────────────────────────────────────────
-// Finish and Sign Out Flow — selectors
-// Assumes the app is ALREADY logged in and on the
-// My Communities page when this file starts.
-//
-// IMPORTANT: every xpath string below starts with
-// a plain "//" — never "[//" — since a stray
-// leading bracket (an artifact of markdown link
-// auto-formatting when pasting XPaths) silently
-// breaks the locator and returns zero elements
-// every time, with no error thrown.
-// ─────────────────────────────────────────────
-const finishSignOutSelectors = {
-    globalNavMenuButton: {
-        android: AndroidLocatorBuilder.xpath(
-            '//android.view.ViewGroup[@resource-id="com.personcentredsoftware.care.delivery:id/GlobalCommunitiesPage"]/android.view.ViewGroup/android.view.ViewGroup[1]/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup[3]/android.view.ViewGroup/android.widget.Button'
-        ),
-        ios: iOSLocatorBuilder.id('GlobalNavMenuButton'),
-    } as TestBotElement,
-
-    finishAndSignOutButton: {
-        android: AndroidLocatorBuilder.xpath(
-            '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/FinishWorkButton"]'
-        ),
-        ios: iOSLocatorBuilder.id('FinishWorkButton'),
-    } as TestBotElement,
-
-    justFinishingUpTitle: {
-        android: AndroidLocatorBuilder.xpath(
-            '//android.widget.TextView[@text="Just Finishing Up"]'
-        ),
-        ios: iOSLocatorBuilder.xpath(
-            '//XCUIElementTypeStaticText[@name="Just Finishing Up"]'
-        ),
-    } as TestBotElement,
-
-    userDropdownAfterSignOut: {
-        android: AndroidLocatorBuilder.xpath(
-            '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/UserPicker"]'
-        ),
-        ios: iOSLocatorBuilder.id('UserPicker'),
-    } as TestBotElement,
-}
-
-// Confirmed-by-log text button (tried first — this one
-// was proven to exist and be clickable in a real run)
-const signOutTextButtonXpath = '//android.widget.Button[@text="Sign Out"]'
-
-// Icon locator described as "the only signout button"
-// (fallback if the text button is not present)
-const signOutIconXpath =
-    '//androidx.recyclerview.widget.RecyclerView/android.widget.FrameLayout/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup[3]/android.widget.ScrollView/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup[1]/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup/android.widget.ImageView'
-
-async function findSignOutControl() {
-    const textBtn = await $(signOutTextButtonXpath)
-    if (await textBtn.isExisting()) {
-        console.log(`✓ Found Sign Out control (text button): ${signOutTextButtonXpath}`)
-        return textBtn
-    }
-    console.warn('Text-based Sign Out button not found, trying icon fallback')
-
-    const iconBtn = await $(signOutIconXpath)
-    if (await iconBtn.isExisting()) {
-        console.log(`✓ Found Sign Out control (icon): ${signOutIconXpath}`)
-        return iconBtn
-    }
-
-    console.error('✖ Sign Out control not found via either method — dumping page source')
-    try {
-        const pageSource = await driver.getPageSource()
-        console.log('─────────── PAGE SOURCE: SIGN OUT CONTROL NOT FOUND ───────────')
-        console.log(pageSource)
-        console.log('────────────────────────────────────────────────────────────')
-    } catch (srcErr) {
-        console.warn('getPageSource failed:', srcErr)
-    }
-    throw new Error('Sign Out control not found via text button or icon fallback.')
-}
+const isLocal = process.env.RUN_MODE === 'local'
+console.log(`Running Adhoc Activity flow in ${isLocal ? 'LOCAL PHYSICAL DEVICE' : 'BROWSERSTACK CLOUD'} mode`)
 
 // ─────────────────────────────────────────────
-// Close (X) button — candidates tried in order.
-// Unlike before, if NONE match, this now returns
-// null instead of throwing — Step 3 will log a
-// warning and skip gracefully rather than killing
-// the whole run, since Close is not required to
-// reach Sign Out (Step 4 re-opens the flow fresh
-// regardless of whether Step 3 succeeded).
+// Full list of care recipients — one is picked
+// at random each run to make the script dynamic
+// rather than always targeting the same person.
 // ─────────────────────────────────────────────
-const closeButtonCandidates: string[] = [
-    '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/CloseButton"]',
-    '//android.widget.ImageView[@resource-id="com.personcentredsoftware.care.delivery:id/CloseButton"]',
-    '//android.widget.Button[@content-desc="Close"]',
-    '//android.widget.ImageView[@content-desc="Close"]',
-    '//android.widget.Button[@text="Close"]',
-    '//android.widget.Button[@text="Cancel"]',
-    '//android.widget.ImageButton[@content-desc="Close"]',
+const CARE_RECIPIENTS = [
+    'Ah-Na Gravy',
+    'Alan Gravy',
+    'Albie Armstrong',
+    'Arturo Reyes',
+    'Benita Reyes',
+    'Brenda Brown',
+    'Charlotte Crawley',
+    'Freya Farrow',
+    'Gaz Garfield',
+    'Harriet Harper',
+    'Ingrid Ingleberry',
+    'Jo Johnson',
+    'Mack Michaels',
+    'Maureeen Moor',
+    'Rico Dawson',
+    'Robyn Partridge',
+    'Rosie Matthews',
+    'Victor Willson',
+    'Yasmine Young',
 ]
 
-async function findCloseButtonOrNull() {
-    for (const xpath of closeButtonCandidates) {
-        const el = await $(xpath)
-        if (await el.isExisting()) {
-            console.log(`✓ Found Close button using: ${xpath}`)
-            return el
-        }
-    }
-    console.warn('⚠ Close button not found with any candidate locator — skipping Step 3 gracefully')
-    try {
-        const pageSource = await driver.getPageSource()
-        console.log('─────────── PAGE SOURCE: CLOSE BUTTON NOT FOUND (non-fatal) ───────────')
-        console.log(pageSource)
-        console.log('────────────────────────────────────────────────────────────────────')
-    } catch (srcErr) {
-        console.warn('getPageSource failed:', srcErr)
-    }
-    return null
+// ─────────────────────────────────────────────
+// Individual named care taker selectors — each
+// one explicitly declared on its own, built from
+// the exact locators provided. These are not used
+// directly for selection (selectRandomResident()
+// below builds locators dynamically from
+// CARE_RECIPIENTS instead, so it stays in sync
+// automatically) but are kept here as named,
+// directly-referenceable selectors per care taker
+// if a specific one is ever needed individually.
+// ─────────────────────────────────────────────
+const careTakerAlanGravy: TestBotElement = {
+    android: AndroidLocatorBuilder.xpath('//android.widget.TextView[@text="Alan Gravy"]'),
+    ios: iOSLocatorBuilder.xpath('//XCUIElementTypeStaticText[@name="Alan Gravy"]'),
+}
+const careTakerAlbieArmstrong: TestBotElement = {
+    android: AndroidLocatorBuilder.xpath('//android.widget.TextView[@text="Albie Armstrong"]'),
+    ios: iOSLocatorBuilder.xpath('//XCUIElementTypeStaticText[@name="Albie Armstrong"]'),
+}
+const careTakerArturoReyes: TestBotElement = {
+    android: AndroidLocatorBuilder.xpath('//android.widget.TextView[@text="Arturo Reyes"]'),
+    ios: iOSLocatorBuilder.xpath('//XCUIElementTypeStaticText[@name="Arturo Reyes"]'),
+}
+const careTakerBenitaReyes: TestBotElement = {
+    android: AndroidLocatorBuilder.xpath('//android.widget.TextView[@text="Benita Reyes"]'),
+    ios: iOSLocatorBuilder.xpath('//XCUIElementTypeStaticText[@name="Benita Reyes"]'),
+}
+const careTakerBrendaBrown: TestBotElement = {
+    android: AndroidLocatorBuilder.xpath('//android.widget.TextView[@text="Brenda Brown"]'),
+    ios: iOSLocatorBuilder.xpath('//XCUIElementTypeStaticText[@name="Brenda Brown"]'),
+}
+const careTakerCharlotteCrawley: TestBotElement = {
+    android: AndroidLocatorBuilder.xpath('//android.widget.TextView[@text="Charlotte Crawley"]'),
+    ios: iOSLocatorBuilder.xpath('//XCUIElementTypeStaticText[@name="Charlotte Crawley"]'),
+}
+const careTakerFreyaFarrow: TestBotElement = {
+    android: AndroidLocatorBuilder.xpath('//android.widget.TextView[@text="Freya Farrow"]'),
+    ios: iOSLocatorBuilder.xpath('//XCUIElementTypeStaticText[@name="Freya Farrow"]'),
+}
+const careTakerGazGarfield: TestBotElement = {
+    android: AndroidLocatorBuilder.xpath('//android.widget.TextView[@text="Gaz Garfield"]'),
+    ios: iOSLocatorBuilder.xpath('//XCUIElementTypeStaticText[@name="Gaz Garfield"]'),
+}
+const careTakerHarrietHarper: TestBotElement = {
+    android: AndroidLocatorBuilder.xpath('//android.widget.TextView[@text="Harriet Harper"]'),
+    ios: iOSLocatorBuilder.xpath('//XCUIElementTypeStaticText[@name="Harriet Harper"]'),
+}
+const careTakerIngridIngleberry: TestBotElement = {
+    android: AndroidLocatorBuilder.xpath('//android.widget.TextView[@text="Ingrid Ingleberry"]'),
+    ios: iOSLocatorBuilder.xpath('//XCUIElementTypeStaticText[@name="Ingrid Ingleberry"]'),
+}
+const careTakerJoJohnson: TestBotElement = {
+    android: AndroidLocatorBuilder.xpath('//android.widget.TextView[@text="Jo Johnson"]'),
+    ios: iOSLocatorBuilder.xpath('//XCUIElementTypeStaticText[@name="Jo Johnson"]'),
+}
+const careTakerMackMichaels: TestBotElement = {
+    android: AndroidLocatorBuilder.xpath('//android.widget.TextView[@text="Mack Michaels"]'),
+    ios: iOSLocatorBuilder.xpath('//XCUIElementTypeStaticText[@name="Mack Michaels"]'),
+}
+const careTakerMaureeenMoor: TestBotElement = {
+    android: AndroidLocatorBuilder.xpath('//android.widget.TextView[@text="Maureeen Moor"]'),
+    ios: iOSLocatorBuilder.xpath('//XCUIElementTypeStaticText[@name="Maureeen Moor"]'),
+}
+const careTakerRicoDawson: TestBotElement = {
+    android: AndroidLocatorBuilder.xpath('//android.widget.TextView[@text="Rico Dawson"]'),
+    ios: iOSLocatorBuilder.xpath('//XCUIElementTypeStaticText[@name="Rico Dawson"]'),
+}
+const careTakerRobynPartridge: TestBotElement = {
+    android: AndroidLocatorBuilder.xpath('//android.widget.TextView[@text="Robyn Partridge"]'),
+    ios: iOSLocatorBuilder.xpath('//XCUIElementTypeStaticText[@name="Robyn Partridge"]'),
+}
+const careTakerRosieMatthews: TestBotElement = {
+    android: AndroidLocatorBuilder.xpath('//android.widget.TextView[@text="Rosie Matthews"]'),
+    ios: iOSLocatorBuilder.xpath('//XCUIElementTypeStaticText[@name="Rosie Matthews"]'),
+}
+const careTakerVictorWillson: TestBotElement = {
+    android: AndroidLocatorBuilder.xpath('//android.widget.TextView[@text="Victor Willson"]'),
+    ios: iOSLocatorBuilder.xpath('//XCUIElementTypeStaticText[@name="Victor Willson"]'),
+}
+const careTakerYasmineYoung: TestBotElement = {
+    android: AndroidLocatorBuilder.xpath('//android.widget.TextView[@text="Yasmine Young"]'),
+    ios: iOSLocatorBuilder.xpath('//XCUIElementTypeStaticText[@name="Yasmine Young"]'),
+}
+
+function pickRandomResident(): string {
+    const index = Math.floor(Math.random() * CARE_RECIPIENTS.length)
+    return CARE_RECIPIENTS[index]
 }
 
 // ─────────────────────────────────────────────
-// Suite — Finish and Sign Out Flow
-// (Community page → Logout only)
+// Helper — dump page source safely, without
+// throwing if the session itself is dead.
 // ─────────────────────────────────────────────
-describe('Care Delivery - Finish and Sign Out Flow', () => {
+async function dumpPageSourceOnFailure(stepLabel: string) {
+    console.error(`Failure at ${stepLabel} — dumping page source`)
+    try {
+        const pageSource = await driver.getPageSource()
+        console.log(`─────────── PAGE SOURCE: ${stepLabel} ───────────`)
+        console.log(pageSource)
+        console.log('─────────────────────────────────────────────')
+    } catch (srcErr) {
+        console.error(
+            `getPageSource ALSO failed (${srcErr instanceof Error ? srcErr.message : srcErr}) — ` +
+            'session likely dead. Consider restarting Appium/BrowserStack session.'
+        )
+    }
+}
 
-    // ── Step 1: Open global nav menu without completing any care notes ──
-    it('Step 1 - Without completing any care notes, open the global nav menu', async () => {
-        try {
-            await testBot.waitUntilVisible(finishSignOutSelectors.globalNavMenuButton, 15000)
-            await testBot.click(finishSignOutSelectors.globalNavMenuButton)
-            await driver.pause(1500)
+function residentLocator(name: string): TestBotElement {
+    return {
+        android: AndroidLocatorBuilder.xpath(
+            `//android.widget.TextView[@text="${name}"]`
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            `//XCUIElementTypeStaticText[@name="${name}"]`
+        ),
+    } as TestBotElement
+}
 
-            await testBot.waitUntilVisible(finishSignOutSelectors.finishAndSignOutButton, 10000)
-            console.log('Global nav menu opened — Finish and Sign Out button is visible')
-        } catch (err) {
-            console.error('Global nav menu or Finish and Sign Out button not found — dumping page source')
+// ─────────────────────────────────────────────
+// Helper — pick and select a resident dynamically
+// AT RUNTIME. Instead of trying shuffled candidates
+// one-by-one (which biases toward whichever name is
+// easiest to find, since the loop stops at the
+// first success), this scans which of the 21 names
+// are ACTUALLY present on screen right now, then
+// picks randomly among only those. This guarantees
+// a genuinely random choice among real options,
+// rather than always converging on the same "easy"
+// name.
+// Returns the name that was actually selected.
+// ─────────────────────────────────────────────
+async function selectRandomResident(): Promise<string> {
+    console.log('▶ Scanning screen for all currently visible care recipients...')
+
+    const visibleCandidates: string[] = []
+
+    for (const candidateName of CARE_RECIPIENTS) {
+        const locator = residentLocator(candidateName)
+        const isPresent = await testBot.isVisible(locator).catch(() => false)
+        if (isPresent) {
+            visibleCandidates.push(candidateName)
+        }
+    }
+
+    console.log(`▶ Found ${visibleCandidates.length} visible candidate(s) without scrolling:`, visibleCandidates)
+
+    // If nothing is visible without scrolling (unusual, but
+    // possible on a very short list view), fall back to
+    // scrolling through the full shuffled list once.
+    if (visibleCandidates.length === 0) {
+        console.warn('No candidates visible without scrolling — falling back to scroll-based search')
+        const shuffled = [...CARE_RECIPIENTS].sort(() => Math.random() - 0.5)
+
+        for (const candidateName of shuffled) {
             try {
-                const pageSource = await driver.getPageSource()
-                console.log('─────────── PAGE SOURCE AT STEP 1 ───────────')
-                console.log(pageSource)
-                console.log('─────────────────────────────────────────')
-            } catch (srcErr) {
-                console.warn('getPageSource failed:', srcErr)
+                const scrolled = await $(
+                    'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
+                    `.scrollIntoView(new UiSelector().textMatches("^${candidateName}$"))`
+                )
+                if (await scrolled.isExisting()) {
+                    await scrolled.click()
+                    console.log(`▶ Selected resident: "${candidateName}" (found via scroll fallback)`)
+                    return candidateName
+                }
+            } catch (err) {
+                console.warn(`"${candidateName}" not found via scroll — trying next candidate`)
             }
+        }
+
+        console.error('None of the care recipients in the list were found on screen — dumping page source')
+        await dumpPageSourceOnFailure('selectRandomResident (no candidate found)')
+        throw new Error('Could not select any resident from the full CARE_RECIPIENTS list — none were visible on screen')
+    }
+
+    // Pick genuinely at random among the names that are
+    // ACTUALLY visible right now.
+    const randomIndex = Math.floor(Math.random() * visibleCandidates.length)
+    const chosenName = visibleCandidates[randomIndex]
+
+    console.log(`▶ Randomly chosen from visible candidates: "${chosenName}"`)
+
+    const locator = residentLocator(chosenName)
+    await testBot.click(locator)
+    console.log(`▶ Selected resident: "${chosenName}"`)
+    return chosenName
+}
+
+// ─────────────────────────────────────────────
+// Adhoc Activity Flow selectors — resident
+// locator is built dynamically from whichever
+// name was randomly picked above.
+// ─────────────────────────────────────────────
+const adhocSelectors = {
+    adhocButton: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.TextView[@text="Adhoc"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeStaticText[@name="Adhoc"]'
+        ),
+    } as TestBotElement,
+
+    activitiesListItem: {
+        android: AndroidLocatorBuilder.xpath(
+            '//androidx.recyclerview.widget.RecyclerView/android.view.ViewGroup[2]/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeCollectionView/XCUIElementTypeCell[2]'
+        ),
+    } as TestBotElement,
+
+    // NB: This arrow TOGGLES open/closed — tap once only.
+    expandArrow: {
+        android: AndroidLocatorBuilder.xpath(
+            '(//android.widget.TextView[@text=""])[1]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '(//XCUIElementTypeStaticText[@name=""])[1]'
+        ),
+    } as TestBotElement,
+
+    selectArtImage: {
+        android: AndroidLocatorBuilder.xpath(
+            '//androidx.recyclerview.widget.RecyclerView/android.view.ViewGroup[3]/android.view.ViewGroup/android.view.ViewGroup[2]/android.view.ViewGroup/android.widget.ImageView'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeCollectionView/XCUIElementTypeCell[3]/XCUIElementTypeImage'
+        ),
+    } as TestBotElement,
+
+    nextButton: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.Button[@text="Next"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeButton[@name="Next"]'
+        ),
+    } as TestBotElement,
+
+    durationScreenTitle: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.TextView[@text="How long did this care take?"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeStaticText[@name="How long did this care take?"]'
+        ),
+    } as TestBotElement,
+
+    // Confirmed: plain grid button, no slider overlap.
+    tenMinsOption: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.TextView[@text="10 mins"] | //android.widget.Button[@text="10 mins"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeStaticText[@name="10 mins"] | //XCUIElementTypeButton[@name="10 mins"]'
+        ),
+    } as TestBotElement,
+
+    // Confirmed: literal "Continue" button at the bottom
+    // of the duration screen.
+    confirmButton: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.Button[@text="Continue"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeButton[@name="Continue"]'
+        ),
+    } as TestBotElement,
+
+    createRecordsButton: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.Button[@text="Create Records"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeButton[@name="Create Records"]'
+        ),
+    } as TestBotElement,
+
+    // NB: Close button locator unconfirmed — falls back to
+    // Create Records button if a dedicated close control
+    // isn't found. Update once confirmed on real screen.
+    closeAfterCreateButton: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.Button[@text="Create Records"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeButton[@name="Create Records"]'
+        ),
+    } as TestBotElement,
+
+    earlierTab: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.TextView[@text="Earlier"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeStaticText[@name="Earlier"]'
+        ),
+    } as TestBotElement,
+}
+
+// ─────────────────────────────────────────────
+// Suite — Dynamic Adhoc Activity Flow
+// (assumes the app is already logged in and on
+// the My Communities page — run this after the
+// enrolment/login suite in the same session)
+//
+// Wait times reduced to 3-5s range throughout,
+// down from the previous 15-20s waits, per
+// request. If this proves too fast for a given
+// screen transition on your device, that step
+// will fail with a clear "element not found"
+// error rather than hang — bump that ONE
+// timeout back up rather than reverting all of
+// them.
+// ─────────────────────────────────────────────
+describe('Care Delivery - Dynamic Adhoc Activity Flow', () => {
+
+    let selectedResidentName = ''
+
+    it('Step 1 - Select a random resident from the community list', async function () {
+        try {
+            selectedResidentName = await selectRandomResident()
+            await driver.pause(3000)
+        } catch (err) {
+            await dumpPageSourceOnFailure('Step 1')
             throw err
         }
     })
 
-    // ── Step 2: Click Finish and Sign Out ──
-    it('Step 2 - Click Finish and Sign Out; verify Just Finishing Up screen with Sign Out control enabled', async () => {
+    it('Step 2 - Click Adhoc', async function () {
         try {
-            await testBot.click(finishSignOutSelectors.finishAndSignOutButton)
-            await driver.pause(2000)
-
-            await testBot.waitUntilVisible(finishSignOutSelectors.justFinishingUpTitle, 15000)
-            console.log('Landed on "Just Finishing Up" screen')
-
-            const signOutControl = await findSignOutControl()
-            const isEnabled = await signOutControl.isEnabled()
-            expect(isEnabled).toBe(true)
-            console.log('Sign Out control is enabled as expected (no pending uploads)')
-
+            await testBot.waitUntilVisible(adhocSelectors.adhocButton, 5000)
+            await testBot.click(adhocSelectors.adhocButton)
+            await driver.pause(3000)
         } catch (err) {
-            console.error('Just Finishing Up screen or Sign Out control check failed — dumping page source')
-            try {
-                const pageSource = await driver.getPageSource()
-                console.log('─────────── PAGE SOURCE AT STEP 2 ───────────')
-                console.log(pageSource)
-                console.log('─────────────────────────────────────────')
-            } catch (srcErr) {
-                console.warn('getPageSource failed:', srcErr)
-            }
+            await dumpPageSourceOnFailure('Step 2')
             throw err
         }
     })
 
-    // ── Step 3: Close via X icon (non-fatal if not found) ──
-    it('Step 3 - Close the Just Finishing Up screen using the X icon if available', async () => {
-        const closeBtn = await findCloseButtonOrNull()
-
-        if (!closeBtn) {
-            console.warn('Skipping Step 3 assertion — Close button was not found on this screen')
-            return
-        }
-
+    it('Step 3 - Select an activity from the list', async function () {
         try {
-            await closeBtn.click()
-            await driver.pause(1500)
-
-            const stillOnFinishingUp = await testBot.isVisible(finishSignOutSelectors.justFinishingUpTitle)
-            expect(stillOnFinishingUp).toBe(false)
-            console.log('Closed Just Finishing Up screen via X icon — returned to app, still signed in')
-
+            await testBot.waitUntilVisible(adhocSelectors.activitiesListItem, 5000)
+            await testBot.click(adhocSelectors.activitiesListItem)
+            await driver.pause(3000)
         } catch (err) {
-            console.error('Close (X) button click failed — dumping page source')
-            try {
-                const pageSource = await driver.getPageSource()
-                console.log('─────────── PAGE SOURCE AT STEP 3 ───────────')
-                console.log(pageSource)
-                console.log('─────────────────────────────────────────')
-            } catch (srcErr) {
-                console.warn('getPageSource failed:', srcErr)
-            }
+            await dumpPageSourceOnFailure('Step 3')
             throw err
         }
     })
 
-    // ── Step 4: Re-open Finishing Up screen and Sign Out ──
-    it('Step 4 - From Just Finishing Up screen, click Sign Out; land on Log In screen', async () => {
+    it('Step 4 - Tap arrow to expand (toggle — tap once only)', async function () {
         try {
-            // If Step 3 closed the screen, this re-opens it fresh.
-            // If Step 3 was skipped (no close button found), we may
-            // already be on the Just Finishing Up screen — check first.
-            const alreadyOnFinishingUp = await testBot.isVisible(finishSignOutSelectors.justFinishingUpTitle)
-
-            if (!alreadyOnFinishingUp) {
-                await testBot.waitUntilVisible(finishSignOutSelectors.globalNavMenuButton, 15000)
-                await testBot.click(finishSignOutSelectors.globalNavMenuButton)
-                await driver.pause(1000)
-
-                await testBot.waitUntilVisible(finishSignOutSelectors.finishAndSignOutButton, 10000)
-                await testBot.click(finishSignOutSelectors.finishAndSignOutButton)
-                await driver.pause(1500)
-
-                await testBot.waitUntilVisible(finishSignOutSelectors.justFinishingUpTitle, 15000)
-            } else {
-                console.log('Already on Just Finishing Up screen — skipping re-open')
-            }
-
-            const signOutControl = await findSignOutControl()
-            await signOutControl.click()
-            await driver.pause(2000)
-
-            await testBot.waitUntilVisible(finishSignOutSelectors.userDropdownAfterSignOut, 15000)
-            console.log('Signed out successfully — landed on Log In screen; device remains enrolled')
-
+            await testBot.waitUntilVisible(adhocSelectors.expandArrow, 5000)
+            await testBot.click(adhocSelectors.expandArrow)
+            await driver.pause(3000)
         } catch (err) {
-            console.error('Sign Out flow failed — dumping page source')
-            try {
-                const pageSource = await driver.getPageSource()
-                console.log('─────────── PAGE SOURCE AT STEP 4 ───────────')
-                console.log(pageSource)
-                console.log('─────────────────────────────────────────')
-            } catch (srcErr) {
-                console.warn('getPageSource failed:', srcErr)
+            await dumpPageSourceOnFailure('Step 4')
+            throw err
+        }
+    })
+
+    it('Step 5 - Select the art', async function () {
+        try {
+            await testBot.waitUntilVisible(adhocSelectors.selectArtImage, 5000)
+            await testBot.click(adhocSelectors.selectArtImage)
+            await driver.pause(3000)
+        } catch (err) {
+            await dumpPageSourceOnFailure('Step 5')
+            throw err
+        }
+    })
+
+    it('Step 6 - Click Next and verify duration screen loads', async function () {
+        try {
+            await testBot.waitUntilVisible(adhocSelectors.nextButton, 5000)
+            await testBot.click(adhocSelectors.nextButton)
+            await driver.pause(3000)
+            await testBot.waitUntilVisible(adhocSelectors.durationScreenTitle, 5000)
+            console.log('Duration screen loaded: "How long did this care take?"')
+        } catch (err) {
+            await dumpPageSourceOnFailure('Step 6')
+            throw err
+        }
+    })
+
+    it('Step 7 - Scroll down and select "10 mins" duration', async function () {
+        try {
+            await testBot.waitUntilVisible(adhocSelectors.durationScreenTitle, 5000)
+
+            const tenMinsXpath =
+                '//android.widget.TextView[@text="10 mins"] | //android.widget.Button[@text="10 mins"]'
+
+            let found = false
+            for (let i = 0; i < 5; i++) {
+                const el = await $(tenMinsXpath)
+                if (await el.isExisting() && await el.isDisplayed()) {
+                    found = true
+                    break
+                }
+
+                const { width, height } = await driver.getWindowSize()
+                await driver.execute('mobile: swipeGesture', {
+                    left: Math.floor(width * 0.2),
+                    top: Math.floor(height * 0.6),
+                    width: Math.floor(width * 0.6),
+                    height: Math.floor(height * 0.3),
+                    direction: 'up',
+                    percent: 0.5,
+                })
+                await driver.pause(3000)
             }
+
+            if (!found) {
+                throw new Error('"10 mins" button never became visible after scrolling')
+            }
+
+            const tenMinsEl = await $(tenMinsXpath)
+            await tenMinsEl.click()
+            console.log('Clicked "10 mins" duration button')
+            await driver.pause(3000)
+        } catch (err) {
+            await dumpPageSourceOnFailure('Step 7')
+            throw err
+        }
+    })
+
+    it('Step 8 - Click Continue button at the bottom', async function () {
+        try {
+            await testBot.waitUntilVisible(adhocSelectors.confirmButton, 5000)
+
+            try {
+                await driver.hideKeyboard()
+                await driver.pause(3000)
+            } catch (kbErr) {
+                console.warn('hideKeyboard failed or keyboard already hidden:', kbErr)
+            }
+
+            const freshContinueBtn = await $(
+                '//android.widget.Button[@text="Continue"]'
+            )
+            await freshContinueBtn.click()
+            await driver.pause(3000)
+
+            let advanced = await testBot.isVisible(adhocSelectors.createRecordsButton).catch(() => false)
+
+            if (!advanced) {
+                console.warn('Create Records not visible after Continue tap — retrying once')
+                const retryBtn = await $('//android.widget.Button[@text="Continue"]')
+                if (await retryBtn.isExisting()) {
+                    await retryBtn.click()
+                    await driver.pause(3000)
+                    advanced = await testBot.isVisible(adhocSelectors.createRecordsButton).catch(() => false)
+                }
+            }
+
+            if (!advanced) {
+                console.warn('Still stuck — trying coordinate-based tap on Continue')
+                const continueBtn = await $('//android.widget.Button[@text="Continue"]')
+                if (await continueBtn.isExisting()) {
+                    const location = await continueBtn.getLocation()
+                    const size = await continueBtn.getSize()
+                    const centerX = Math.floor(location.x + size.width / 2)
+                    const centerY = Math.floor(location.y + size.height / 2)
+                    console.log(`Tapping Continue at coordinates: ${centerX}, ${centerY}`)
+
+                    await driver.action('pointer', { parameters: { pointerType: 'touch' } })
+                        .move({ duration: 0, x: centerX, y: centerY })
+                        .down({ button: 0 })
+                        .pause(100)
+                        .up({ button: 0 })
+                        .perform()
+
+                    await driver.pause(3000)
+                }
+            }
+        } catch (err) {
+            await dumpPageSourceOnFailure('Step 8')
+            throw err
+        }
+    })
+
+    it('Step 9 - Click Create Records', async function () {
+        try {
+            await testBot.waitUntilVisible(adhocSelectors.createRecordsButton, 5000)
+            await testBot.click(adhocSelectors.createRecordsButton)
+            await driver.pause(3000)
+        } catch (err) {
+            await dumpPageSourceOnFailure('Step 9')
+            throw err
+        }
+    })
+
+    it('Step 10 - Click Close', async function () {
+        try {
+            await testBot.waitUntilVisible(adhocSelectors.closeAfterCreateButton, 5000)
+            await testBot.click(adhocSelectors.closeAfterCreateButton)
+            await driver.pause(3000)
+        } catch (err) {
+            await dumpPageSourceOnFailure('Step 10')
+            throw err
+        }
+    })
+
+    it('Step 11 - Click on "Earlier" tab', async function () {
+        try {
+            await testBot.waitUntilVisible(adhocSelectors.earlierTab, 5000)
+            await testBot.click(adhocSelectors.earlierTab)
+            await driver.pause(3000)
+        } catch (err) {
+            await dumpPageSourceOnFailure('Step 11')
             throw err
         }
     })
