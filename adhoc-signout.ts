@@ -251,11 +251,44 @@ async function isNoteVisible(name: string): Promise<boolean> {
 }
 
 // ─────────────────────────────────────────────
+// Helper — find a note by name, scrolling the
+// "Select Care" list if it isn't visible without
+// scrolling first. Tries direct visibility, then
+// falls back to UiScrollable.scrollIntoView, same
+// pattern used for resident/duration selection
+// elsewhere in this file. Returns true if found
+// (and leaves it on screen, scrolled into view),
+// false if genuinely not present anywhere in the
+// list even after scrolling.
+// ─────────────────────────────────────────────
+async function scrollToNoteIfNeeded(name: string): Promise<boolean> {
+    if (await isNoteVisible(name)) {
+        return true
+    }
+
+    console.log(`  "${name}" not visible without scrolling — scrolling to find it`)
+    try {
+        const scrolled = await $(
+            'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
+            `.scrollIntoView(new UiSelector().textMatches("^${name}$"))`
+        )
+        if (await scrolled.isExisting()) {
+            return true
+        }
+    } catch (err) {
+        console.warn(`  UiScrollable scroll for "${name}" failed:`, err)
+    }
+
+    return false
+}
+
+// ─────────────────────────────────────────────
 // Mode A helper — select exactly the names given,
-// in order, verifying each is actually visible
-// before tapping it. Throws immediately (naming
-// the missing note) if any requested name isn't
-// on screen, since Mode A is meant to be
+// in order, scrolling the "Select Care" list as
+// needed to find each one before tapping it.
+// Throws immediately (naming the missing note) if
+// any requested name still can't be found after
+// scrolling, since Mode A is meant to be
 // deterministic — a silent skip would defeat the
 // purpose of asking for specific notes.
 // ─────────────────────────────────────────────
@@ -264,13 +297,14 @@ async function selectExplicitCareNotes(names: string[]): Promise<string[]> {
 
     const selected: string[] = []
     for (const name of names) {
-        const visible = await isNoteVisible(name)
-        if (!visible) {
+        const found = await scrollToNoteIfNeeded(name)
+        if (!found) {
             await dumpPageSourceOnFailure(`selectExplicitCareNotes (missing "${name}")`)
             throw new Error(
-                `Requested care note "${name}" is not visible on the "Select Care" screen. ` +
-                `Check spelling against CARE_NOTE_CATEGORIES, or that it belongs to a category ` +
-                `that's actually shown for this resident/community.`
+                `Requested care note "${name}" was not found on the "Select Care" screen, ` +
+                `even after scrolling. Check spelling — it must match exactly what's shown ` +
+                `on screen — or that it belongs to a category that's actually available for ` +
+                `this resident/community.`
             )
         }
         await testBot.click(careNoteLocator(name))
