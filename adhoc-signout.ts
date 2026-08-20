@@ -137,17 +137,28 @@ async function selectRandomResident(): Promise<string> {
 
 // ─────────────────────────────────────────────
 // Care note types shown in the "Select Care"
-// picker, grouped by their real on-screen
-// category tab so we can guarantee at least one
-// pick per section rather than a flat random pool
-// that might land 3 picks all in Activities and
-// skip Communication/Medical/Personal Care
-// entirely.
+// picker, grouped by their real on-screen section
+// tab so we can guarantee at least one pick per
+// section rather than a flat random pool that
+// might land all picks in one section and skip
+// the rest entirely.
 //
-// Activities entries are confirmed from a real
-// "Select Care" picker page-source dump. The
-// Communication/Medical/Personal Care entries are
-// as provided.
+// Activities/Communication/Medical/Personal Care
+// entries are confirmed from a real "Select Care"
+// picker page-source dump or as previously
+// provided. The remaining sections (Emotional
+// Support, Going to the Toilet, Mobility,
+// Nutrition/Eating & Drinking, Personal Safety &
+// Environment, Process, Sleeping) are NOT yet
+// confirmed — each has an EMPTY array below as a
+// placeholder. Fill in the real note names for
+// each (visible on the "Select Care" screen under
+// that section's tab) before relying on random
+// selection for that section; until filled in,
+// that section is simply skipped by Mode B
+// (nothing to pick from) and can still be targeted
+// directly by name in Mode A/per-section explicit
+// lists regardless of this list being empty.
 // ─────────────────────────────────────────────
 const CARE_NOTE_CATEGORIES = {
     Activities: [
@@ -178,62 +189,113 @@ const CARE_NOTE_CATEGORIES = {
         'Mentoring',
         'Newspaper',
     ],
+    'Emotional Support': [
+        // TODO: fill in real note names for this section
+    ],
+    'Going to the Toilet': [
+        // TODO: fill in real note names for this section
+    ],
     Medical: [
         'Add bag',
         'Ambulance',
         'Blood',
         'INR',
     ],
+    Mobility: [
+        // TODO: fill in real note names for this section
+    ],
+    'Nutrition, Eating & Drinking': [
+        // TODO: fill in real note names for this section
+    ],
     'Personal Care': [
         'Bath',
         'Catheter care',
         'Change clothes',
     ],
+    'Personal Safety & Environment': [
+        // TODO: fill in real note names for this section
+    ],
+    Process: [
+        // TODO: fill in real note names for this section
+    ],
+    Sleeping: [
+        // TODO: fill in real note names for this section
+    ],
 } as const
 
 type CareNoteCategory = keyof typeof CARE_NOTE_CATEGORIES
 
-// Flat pool (all categories combined) — used only
-// for the "pure random, no category guarantee"
+const ALL_CATEGORY_NAMES = Object.keys(CARE_NOTE_CATEGORIES) as CareNoteCategory[]
+
+// Flat pool (all sections combined) — used only
+// for the "pure random, no section guarantee"
 // mode, kept for backward compatibility.
 const CARE_NOTE_TYPES: string[] = Object.values(CARE_NOTE_CATEGORIES).flat()
 
 // ─────────────────────────────────────────────
-// RUN CONFIGURATION — edit these two values
-// before each run to control what gets selected.
+// RUN CONFIGURATION — edit PER_SECTION_CONFIG
+// before each run to control what gets selected,
+// independently for EACH of the 11 sections.
 //
-// Two modes, pick ONE:
+// For every section, choose ONE of:
 //
-// MODE A — Explicit names (deterministic).
-// Set EXPLICIT_CARE_NOTES to a non-empty array of
-// exact note names (must match CARE_NOTE_CATEGORIES
-// spelling) to select EXACTLY those, in that order,
-// regardless of category. Leave it as an empty
-// array [] to use Mode B instead.
-//   Example: ['Bingo', 'Bath', 'Chatted']
+//   { mode: 'explicit', notes: ['Name One', 'Name Two'] }
+//     -> selects EXACTLY those names from that
+//        section, in that order (scrolls to find
+//        each one if needed). Fails with a clear
+//        error if a name can't be found even after
+//        scrolling — this mode is deterministic on
+//        purpose, so a typo or wrong section is
+//        never silently ignored.
 //
-// MODE B — Random, at least one per category.
-// Used automatically whenever EXPLICIT_CARE_NOTES
-// is empty. ONE_PER_CATEGORY controls whether every
-// run guarantees at least one note from each of the
-// 4 categories (Activities / Communication /
-// Medical / Personal Care) that has a visible
-// candidate, topping up to CARE_NOTE_COUNT with
-// further random picks from whatever remains
-// visible. Set to false to fall back to pure random
-// selection from the flat pool with no per-category
-// guarantee (the old behaviour).
+//   { mode: 'random', count: 2 }
+//     -> picks that many RANDOM notes from
+//        whatever's visible in that section
+//        (scrolling to discover the full list
+//        first). Set count to 0 to skip the
+//        section's random pick entirely while
+//        still leaving it configured for later.
 //
-// CARE_NOTE_COUNT is only used in Mode B — how many
-// notes to select in total this run. Capped at 10
-// regardless of the value set here (per requirement:
-// never more than 10 in a single run). Has no effect
-// in Mode A, where the count is simply the length of
-// EXPLICIT_CARE_NOTES.
+//   { mode: 'skip' }
+//     -> section is not touched at all this run.
+//
+// Every section not listed in PER_SECTION_CONFIG
+// defaults to `{ mode: 'skip' }` automatically —
+// you only need to list the sections you actually
+// want to act on for a given run.
+//
+// Total notes selected across ALL sections combined
+// is still capped at 10 per run (per requirement).
+// If your per-section requests add up to more than
+// 10, sections are processed in the order listed
+// below and the run stops adding further notes once
+// the cap is reached (already-completed sections are
+// unaffected).
 // ─────────────────────────────────────────────
-const EXPLICIT_CARE_NOTES: string[] = []
-const ONE_PER_CATEGORY = true
-const CARE_NOTE_COUNT = 4
+type SectionSelection =
+    | { mode: 'explicit'; notes: string[] }
+    | { mode: 'random'; count: number }
+    | { mode: 'skip' }
+
+const PER_SECTION_CONFIG: Partial<Record<CareNoteCategory, SectionSelection>> = {
+    Activities: { mode: 'random', count: 1 },
+    Communication: { mode: 'random', count: 1 },
+    'Emotional Support': { mode: 'random', count: 1 },
+    'Going to the Toilet': { mode: 'random', count: 1 },
+    Medical: { mode: 'random', count: 1 },
+    Mobility: { mode: 'random', count: 1 },
+    'Nutrition, Eating & Drinking': { mode: 'random', count: 1 },
+    'Personal Care': { mode: 'random', count: 1 },
+    'Personal Safety & Environment': { mode: 'random', count: 1 },
+    Process: { mode: 'random', count: 1 },
+    Sleeping: { mode: 'random', count: 1 },
+}
+
+// Overall cap — never select more than this many
+// notes total across all sections combined in one
+// run, regardless of what PER_SECTION_CONFIG asks
+// for.
+const OVERALL_CARE_NOTE_CAP = 10
 
 function careNoteLocator(name: string): TestBotElement {
     return {
@@ -254,12 +316,11 @@ async function isNoteVisible(name: string): Promise<boolean> {
 // Helper — find a note by name, scrolling the
 // "Select Care" list if it isn't visible without
 // scrolling first. Tries direct visibility, then
-// falls back to UiScrollable.scrollIntoView, same
-// pattern used for resident/duration selection
-// elsewhere in this file. Returns true if found
-// (and leaves it on screen, scrolled into view),
-// false if genuinely not present anywhere in the
-// list even after scrolling.
+// falls back to UiScrollable.scrollIntoView.
+// Returns true if found (and leaves it on screen,
+// scrolled into view), false if genuinely not
+// present anywhere in the list even after
+// scrolling.
 // ─────────────────────────────────────────────
 async function scrollToNoteIfNeeded(name: string): Promise<boolean> {
     if (await isNoteVisible(name)) {
@@ -283,161 +344,188 @@ async function scrollToNoteIfNeeded(name: string): Promise<boolean> {
 }
 
 // ─────────────────────────────────────────────
-// Mode A helper — select exactly the names given,
-// in order, scrolling the "Select Care" list as
-// needed to find each one before tapping it.
-// Throws immediately (naming the missing note) if
-// any requested name still can't be found after
-// scrolling, since Mode A is meant to be
-// deterministic — a silent skip would defeat the
-// purpose of asking for specific notes.
+// Helper — scroll the "Select Care" list to the
+// named section's tab/heading, so that section's
+// notes are the ones currently in view before we
+// scan or select within it. Sections are laid out
+// as tabs/headings on the same scrollable screen;
+// scrolling to the section name itself brings its
+// notes into view directly below it.
 // ─────────────────────────────────────────────
-async function selectExplicitCareNotes(names: string[]): Promise<string[]> {
-    console.log(`▶ Mode A (explicit): selecting exactly ${names.length} requested care note(s):`, names)
+async function scrollToSection(category: CareNoteCategory): Promise<boolean> {
+    const sectionHeadingXpath = `//android.widget.TextView[@text="${category}"]`
+
+    const headingEl = await $(sectionHeadingXpath)
+    if (await headingEl.isExisting() && await headingEl.isDisplayed()) {
+        return true
+    }
+
+    console.log(`  Scrolling to section heading "${category}"...`)
+    try {
+        const scrolled = await $(
+            'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
+            `.scrollIntoView(new UiSelector().textMatches("^${category}$"))`
+        )
+        return await scrolled.isExisting()
+    } catch (err) {
+        console.warn(`  Could not scroll to section "${category}":`, err)
+        return false
+    }
+}
+
+// ─────────────────────────────────────────────
+// Selects EXACTLY the given note names within one
+// section, in order, scrolling to find each one.
+// Throws immediately (naming the missing note) if
+// any requested name can't be found even after
+// scrolling — deterministic on purpose, so a typo
+// is never silently ignored.
+// ─────────────────────────────────────────────
+async function selectExplicitNotesInSection(category: CareNoteCategory, names: string[]): Promise<string[]> {
+    console.log(`▶ [${category}] Mode: explicit — selecting exactly ${names.length} requested note(s):`, names)
+
+    await scrollToSection(category)
 
     const selected: string[] = []
     for (const name of names) {
         const found = await scrollToNoteIfNeeded(name)
         if (!found) {
-            await dumpPageSourceOnFailure(`selectExplicitCareNotes (missing "${name}")`)
+            await dumpPageSourceOnFailure(`selectExplicitNotesInSection (${category}: missing "${name}")`)
             throw new Error(
-                `Requested care note "${name}" was not found on the "Select Care" screen, ` +
-                `even after scrolling. Check spelling — it must match exactly what's shown ` +
-                `on screen — or that it belongs to a category that's actually available for ` +
-                `this resident/community.`
+                `Requested care note "${name}" (section "${category}") was not found on the ` +
+                `"Select Care" screen, even after scrolling. Check spelling — it must match ` +
+                `exactly what's shown on screen — and that it actually belongs to this section.`
             )
         }
         await testBot.click(careNoteLocator(name))
-        console.log(`▶ Selected care note: "${name}"`)
+        console.log(`▶ [${category}] Selected: "${name}"`)
         selected.push(name)
         await driver.pause(500)
     }
 
-    console.log(`▶ Total care notes selected (${selected.length}):`, selected)
     return selected
 }
 
 // ─────────────────────────────────────────────
-// Mode B helper — random selection guaranteeing
-// at least one note per category (when that
-// category has any visible candidate), then tops
-// up to requestedCount with further random picks
-// from whatever remains visible across all
-// categories. Requests above 10 are capped to 10.
+// Selects `count` RANDOM notes from within one
+// section, scrolling to discover the section's
+// full visible list first (from CARE_NOTE_CATEGORIES
+// as a starting point, verified against what's
+// actually on screen). If the section's
+// CARE_NOTE_CATEGORIES entry is still an empty
+// placeholder (not yet filled in), this returns an
+// empty array and logs a warning rather than
+// failing the whole run — fill in the real note
+// names for that section to enable random
+// selection there.
 // ─────────────────────────────────────────────
-async function selectRandomCareNotesOnePerCategory(requestedCount: number): Promise<string[]> {
-    console.log(`▶ Mode B (random, ≥1 per category): scanning "Select Care" screen (requested total: ${requestedCount})...`)
-
-    const visibleByCategory: Record<string, string[]> = {}
-    let totalVisible = 0
-
-    for (const [category, names] of Object.entries(CARE_NOTE_CATEGORIES)) {
-        const visibleInCategory: string[] = []
-        for (const name of names) {
-            if (await isNoteVisible(name)) {
-                visibleInCategory.push(name)
-            }
-        }
-        visibleByCategory[category] = visibleInCategory
-        totalVisible += visibleInCategory.length
-        console.log(`  ${category}: ${visibleInCategory.length} visible candidate(s)`, visibleInCategory)
+async function selectRandomNotesInSection(category: CareNoteCategory, count: number): Promise<string[]> {
+    if (count <= 0) {
+        return []
     }
 
-    if (totalVisible === 0) {
-        await dumpPageSourceOnFailure('selectRandomCareNotesOnePerCategory (no candidate found)')
-        throw new Error('Could not find any care note on the "Select Care" screen — none were visible in any category')
+    const knownNames = CARE_NOTE_CATEGORIES[category] as readonly string[]
+    if (knownNames.length === 0) {
+        console.warn(
+            `▶ [${category}] Mode: random — SKIPPED. No known note names configured for this ` +
+            `section yet (CARE_NOTE_CATEGORIES['${category}'] is empty). Fill in the real note ` +
+            `names for this section, or use { mode: 'explicit', notes: [...] } instead.`
+        )
+        return []
     }
 
-    const cappedCount = Math.min(requestedCount, 10, totalVisible)
-    if (requestedCount > 10) {
-        console.log(`▶ Requested ${requestedCount} care notes — capping to a random ${Math.min(10, totalVisible)} per requirement`)
-    }
+    console.log(`▶ [${category}] Mode: random — selecting up to ${count} note(s) from ${knownNames.length} known candidate(s)`)
 
-    // Step 1: guarantee one pick from each category that has at
-    // least one visible candidate, up to cappedCount total.
-    const chosen: string[] = []
-    const categoriesWithCandidates = Object.entries(visibleByCategory).filter(([, names]) => names.length > 0)
-
-    for (const [category, names] of categoriesWithCandidates) {
-        if (chosen.length >= cappedCount) break
-        const pick = names[Math.floor(Math.random() * names.length)]
-        chosen.push(pick)
-        console.log(`  Guaranteed pick for "${category}": "${pick}"`)
-    }
-
-    // Step 2: top up to cappedCount with further random picks
-    // from whatever remains visible (any category, no repeats).
-    if (chosen.length < cappedCount) {
-        const remainingPool = Object.values(visibleByCategory)
-            .flat()
-            .filter((name) => !chosen.includes(name))
-        const shuffledRemaining = [...remainingPool].sort(() => Math.random() - 0.5)
-        const topUp = shuffledRemaining.slice(0, cappedCount - chosen.length)
-        chosen.push(...topUp)
-        if (topUp.length > 0) {
-            console.log(`  Topped up with ${topUp.length} further random pick(s):`, topUp)
-        }
-    }
-
-    // Tap each chosen note's checkbox in the multi-select picker.
-    for (const name of chosen) {
-        await testBot.click(careNoteLocator(name))
-        console.log(`▶ Selected care note: "${name}"`)
-        await driver.pause(500)
-    }
-
-    console.log(`▶ Total care notes selected (${chosen.length}):`, chosen)
-    return chosen
-}
-
-// ─────────────────────────────────────────────
-// Mode B fallback — pure random from the flat pool,
-// no per-category guarantee. Used only when
-// ONE_PER_CATEGORY is explicitly set to false.
-// ─────────────────────────────────────────────
-async function selectRandomCareNotesFlat(requestedCount: number): Promise<string[]> {
-    console.log(`▶ Mode B (pure random, flat pool): scanning "Select Care" screen (requested: ${requestedCount})...`)
+    await scrollToSection(category)
 
     const visibleCandidates: string[] = []
-    for (const candidateName of CARE_NOTE_TYPES) {
-        if (await isNoteVisible(candidateName)) {
+    for (const candidateName of knownNames) {
+        const found = await scrollToNoteIfNeeded(candidateName)
+        if (found) {
             visibleCandidates.push(candidateName)
         }
     }
 
-    console.log(`▶ Found ${visibleCandidates.length} visible care note candidate(s):`, visibleCandidates)
+    console.log(`  [${category}] ${visibleCandidates.length} visible candidate(s):`, visibleCandidates)
 
     if (visibleCandidates.length === 0) {
-        await dumpPageSourceOnFailure('selectRandomCareNotesFlat (no candidate found)')
-        throw new Error('Could not select any care note from the "Select Care" list — none were visible on screen')
+        console.warn(`  [${category}] No candidates found visible on screen — skipping this section`)
+        return []
     }
 
-    const cappedCount = Math.min(requestedCount, 10, visibleCandidates.length)
+    const cappedCount = Math.min(count, visibleCandidates.length)
     const shuffled = [...visibleCandidates].sort(() => Math.random() - 0.5)
     const chosenNames = shuffled.slice(0, cappedCount)
 
+    const selected: string[] = []
     for (const name of chosenNames) {
+        const found = await scrollToNoteIfNeeded(name)
+        if (!found) {
+            console.warn(`  [${category}] "${name}" was visible during scan but not found when re-scrolling to select it — skipping`)
+            continue
+        }
         await testBot.click(careNoteLocator(name))
-        console.log(`▶ Selected care note: "${name}"`)
+        console.log(`▶ [${category}] Selected: "${name}"`)
+        selected.push(name)
         await driver.pause(500)
     }
 
-    console.log(`▶ Total care notes selected (${chosenNames.length}):`, chosenNames)
-    return chosenNames
+    return selected
 }
 
 // ─────────────────────────────────────────────
-// Entry point — picks the right mode/helper based
-// on the RUN CONFIGURATION constants above.
+// Entry point — walks PER_SECTION_CONFIG in
+// declaration order, applying each section's
+// configured mode ('explicit' / 'random' / 'skip'),
+// and stops adding further notes once
+// OVERALL_CARE_NOTE_CAP is reached. Sections
+// processed before the cap was hit are unaffected;
+// a section that would push the total over the cap
+// has its selection trimmed to fit exactly, not
+// skipped entirely.
 // ─────────────────────────────────────────────
 async function selectCareNotesForThisRun(): Promise<string[]> {
-    if (EXPLICIT_CARE_NOTES.length > 0) {
-        return selectExplicitCareNotes(EXPLICIT_CARE_NOTES)
+    const allSelected: string[] = []
+
+    for (const category of ALL_CATEGORY_NAMES) {
+        const config = PER_SECTION_CONFIG[category] ?? { mode: 'skip' }
+
+        if (allSelected.length >= OVERALL_CARE_NOTE_CAP) {
+            console.log(`▶ [${category}] Overall cap (${OVERALL_CARE_NOTE_CAP}) already reached — skipping remaining sections`)
+            break
+        }
+
+        const remainingBudget = OVERALL_CARE_NOTE_CAP - allSelected.length
+
+        if (config.mode === 'skip') {
+            console.log(`▶ [${category}] Mode: skip`)
+            continue
+        }
+
+        if (config.mode === 'explicit') {
+            const namesToRequest = config.notes.slice(0, remainingBudget)
+            if (namesToRequest.length < config.notes.length) {
+                console.warn(
+                    `▶ [${category}] Requested ${config.notes.length} explicit note(s) but only ` +
+                    `${remainingBudget} remain under the overall cap (${OVERALL_CARE_NOTE_CAP}) — ` +
+                    `trimming to: ${namesToRequest.join(', ')}`
+                )
+            }
+            const selected = await selectExplicitNotesInSection(category, namesToRequest)
+            allSelected.push(...selected)
+            continue
+        }
+
+        if (config.mode === 'random') {
+            const requestCount = Math.min(config.count, remainingBudget)
+            const selected = await selectRandomNotesInSection(category, requestCount)
+            allSelected.push(...selected)
+            continue
+        }
     }
-    if (ONE_PER_CATEGORY) {
-        return selectRandomCareNotesOnePerCategory(CARE_NOTE_COUNT)
-    }
-    return selectRandomCareNotesFlat(CARE_NOTE_COUNT)
+
+    console.log(`▶ Total care notes selected across all sections (${allSelected.length}):`, allSelected)
+    return allSelected
 }
 
 // ─────────────────────────────────────────────
@@ -585,15 +673,24 @@ describe('Care Delivery - Dynamic Adhoc Activity Flow', () => {
     let selectedCareNotes: string[] = []
 
     // Number of "Update Care" completion iterations to generate as
-    // test steps. In Mode A (explicit names) this is simply the
-    // length of EXPLICIT_CARE_NOTES; in Mode B it's the capped
-    // CARE_NOTE_COUNT. Known up front so Mocha can register a
-    // fixed number of `it()` blocks; if fewer notes actually end
-    // up selected at runtime, the extra iterations skip themselves
+    // test steps, computed up front from PER_SECTION_CONFIG so Mocha
+    // can register a fixed number of `it()` blocks. This is the
+    // theoretical MAXIMUM across all sections (explicit lengths +
+    // random counts), capped at OVERALL_CARE_NOTE_CAP — the actual
+    // number selected at runtime may be lower (e.g. a random
+    // section finding fewer visible candidates than requested, or
+    // the overall cap trimming a later section); any planned
+    // iteration beyond what was actually selected skips itself
     // gracefully (see the loop below).
-    const plannedNoteIterations = EXPLICIT_CARE_NOTES.length > 0
-        ? EXPLICIT_CARE_NOTES.length
-        : Math.min(CARE_NOTE_COUNT, 10)
+    const plannedNoteIterations = Math.min(
+        OVERALL_CARE_NOTE_CAP,
+        ALL_CATEGORY_NAMES.reduce((sum, category) => {
+            const config = PER_SECTION_CONFIG[category] ?? { mode: 'skip' }
+            if (config.mode === 'explicit') return sum + config.notes.length
+            if (config.mode === 'random') return sum + config.count
+            return sum
+        }, 0)
+    )
 
     // Scrolls to the bottom "How long did this care take?" section, picks
     // "10 mins", then taps the bottom "Continue" button — shared by every
@@ -690,7 +787,7 @@ describe('Care Delivery - Dynamic Adhoc Activity Flow', () => {
         }
     })
 
-    it(`Step 3 - Open the "Select Care" picker and choose care note(s) (${EXPLICIT_CARE_NOTES.length > 0 ? `explicit: ${EXPLICIT_CARE_NOTES.join(', ')}` : `random, ${ONE_PER_CATEGORY ? '≥1 per category, ' : ''}up to ${CARE_NOTE_COUNT}`})`, async function () {
+    it('Step 3 - Open the "Select Care" picker and choose care note(s) per section config', async function () {
         try {
             await testBot.waitUntilVisible(adhocSelectors.activitiesListItem, 5000)
             await testBot.click(adhocSelectors.activitiesListItem)
