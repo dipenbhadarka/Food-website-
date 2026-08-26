@@ -213,10 +213,21 @@ const CARE_NOTE_CATEGORIES = {
         'Change clothes',
     ],
     'Personal Safety & Environment': [
-        // TODO: fill in real note names for this section
+        // NB: confirmed from a real screenshot, but the section
+        // header above these was cut off — please confirm these
+        // 4 genuinely belong to "Personal Safety & Environment"
+        // and not a different, unlabelled section.
+        'Fridge temperature',
+        'Pendant alarm',
+        'Room temperature',
+        'Wheelchair belt',
     ],
     Process: [
-        // TODO: fill in real note names for this section
+        // Confirmed from a real screenshot of the "Select Care" screen.
+        'Admitted',
+        'Alert',
+        'Complaint',
+        'Compliment',
     ],
     Sleeping: [
         // TODO: fill in real note names for this section
@@ -543,6 +554,23 @@ const adhocSelectors = {
         ),
     } as TestBotElement,
 
+    // On the "Select Care" screen, toggles between grid/icon view
+    // (sections shown as icon tiles, current default) and a
+    // compact list view. NB: this is a generic empty-text button
+    // XPath (matches the FIRST such button on screen) — confirmed
+    // via screenshot to sit next to the search icon, but if the
+    // screen has other empty-text buttons above it in document
+    // order this may need to be scoped further (e.g. with a
+    // resource-id) once verified in Appium Inspector.
+    selectCareViewToggleButton: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.Button[@text=""]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeButton[@name=""]'
+        ),
+    } as TestBotElement,
+
     activitiesListItem: {
         android: AndroidLocatorBuilder.xpath(
             '//androidx.recyclerview.widget.RecyclerView/android.view.ViewGroup[2]/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup'
@@ -794,6 +822,20 @@ describe('Care Delivery - Dynamic Adhoc Activity Flow', () => {
             await driver.pause(3000)
 
             await testBot.waitUntilVisible(adhocSelectors.selectCareScreenTitle, 10000)
+
+            // Tap the view-toggle button ONCE, right away, so all
+            // sections/notes render expanded on one screen instead
+            // of the default collapsed/scrollable grid — this
+            // removes the need for per-note scroll-hunting below.
+            try {
+                await testBot.waitUntilVisible(adhocSelectors.selectCareViewToggleButton, 5000)
+                await testBot.click(adhocSelectors.selectCareViewToggleButton)
+                console.log('Tapped view-toggle button — expecting all sections/notes to render expanded')
+                await driver.pause(2000)
+            } catch (toggleErr) {
+                console.warn('View-toggle button not found or tap failed — continuing with default (scrollable) view:', toggleErr)
+            }
+
             selectedCareNotes = await selectCareNotesForThisRun()
             await driver.pause(3000)
 
