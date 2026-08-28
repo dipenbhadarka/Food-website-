@@ -167,6 +167,9 @@ const BOUNDARY_INVALID_VALUES = [
     '-5',                         // negative
     'abc',                        // non-numeric
     '20.5.5',                     // malformed decimal
+    '999999',                     // extreme/overflow-style value, far outside range
+    '   ',                        // whitespace-only — a common "looks blank but isn't
+                                   // literally empty" bug distinct from BLANK_VALUE below
 ]
 
 const BLANK_VALUE = ''
@@ -190,6 +193,12 @@ const selectors = {
     } as TestBotElement,
 
     // Arrow beside the search icon — expands all sections at once.
+    // NB: SUPERSEDED — this generic (first-match) locator was not
+    // reliably hitting the correct arrow on this screen. Replaced
+    // in navigateToWeightEntryScreen() with an indexed-candidate
+    // search (tries [1], [2], [3] and verifies expansion actually
+    // happened) instead of a single blind click on this selector.
+    // Kept here for reference only — not used in the flow below.
     expandAllSectionsButton: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.Button[@text=""]'
@@ -459,10 +468,47 @@ async function navigateToWeightEntryScreen(): Promise<string> {
         await testBot.click(selectors.adhocButton)
         await driver.pause(2000)
 
-        await testBot.waitUntilVisible(selectors.expandAllSectionsButton, 5000)
-        await testBot.click(selectors.expandAllSectionsButton)
-        console.log('Tapped expand-all-sections button')
-        await driver.pause(1500)
+        // NB: //android.widget.Button[@text=""] matches the FIRST
+        // empty-text button in document order — if this screen has
+        // more than one, the plain click below may hit the wrong
+        // one silently (no error, just doesn't expand anything).
+        // Try index [1] first (matches the confirmed-working
+        // pattern from the adhoc flexible-categories file), verify
+        // something actually expanded (weightIcon becomes visible),
+        // and fall back to trying other indices if not.
+        let expanded = false
+        const arrowIndexCandidates = [1, 2, 3]
+
+        for (const idx of arrowIndexCandidates) {
+            const arrowXpath = `(//android.widget.Button[@text=""])[${idx}]`
+            const arrowEl = await $(arrowXpath)
+
+            if (!(await arrowEl.isExisting())) {
+                console.log(`  Arrow candidate [${idx}] does not exist on screen — trying next`)
+                continue
+            }
+
+            await arrowEl.click()
+            console.log(`  Tapped arrow candidate [${idx}] — checking if sections expanded`)
+            await driver.pause(1500)
+
+            expanded = await testBot.isVisible(selectors.weightIcon).catch(() => false)
+            if (expanded) {
+                console.log(`✓ Sections expanded successfully using arrow index [${idx}]`)
+                break
+            }
+            console.log(`  Arrow candidate [${idx}] tapped but weight icon still not visible — trying next candidate`)
+        }
+
+        if (!expanded) {
+            console.error('None of the arrow candidates expanded the sections — dumping page source')
+            await dumpPageSourceOnFailure('navigateToWeightEntryScreen - arrow expand failed')
+            throw new Error(
+                'Could not expand sections via any candidate arrow button. The XPath ' +
+                '//android.widget.Button[@text=""] is too generic for this screen — check the ' +
+                'page source dump above for the real index/resource-id of the correct arrow.'
+            )
+        }
 
         await testBot.waitUntilVisible(selectors.weightIcon, 5000)
         await testBot.click(selectors.weightIcon)
