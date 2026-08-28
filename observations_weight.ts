@@ -193,12 +193,10 @@ const selectors = {
     } as TestBotElement,
 
     // Arrow beside the search icon — expands all sections at once.
-    // NB: SUPERSEDED — this generic (first-match) locator was not
-    // reliably hitting the correct arrow on this screen. Replaced
-    // in navigateToWeightEntryScreen() with an indexed-candidate
-    // search (tries [1], [2], [3] and verifies expansion actually
-    // happened) instead of a single blind click on this selector.
-    // Kept here for reference only — not used in the flow below.
+    // Confirmed working exactly as-is (plain, unindexed) in
+    // adhoc-signout.ts's Step 3 — same locator, same tap-once
+    // pattern, used identically in navigateToWeightEntryScreen()
+    // below.
     expandAllSectionsButton: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.Button[@text=""]'
@@ -468,46 +466,19 @@ async function navigateToWeightEntryScreen(): Promise<string> {
         await testBot.click(selectors.adhocButton)
         await driver.pause(2000)
 
-        // NB: //android.widget.Button[@text=""] matches the FIRST
-        // empty-text button in document order — if this screen has
-        // more than one, the plain click below may hit the wrong
-        // one silently (no error, just doesn't expand anything).
-        // Try index [1] first (matches the confirmed-working
-        // pattern from the adhoc flexible-categories file), verify
-        // something actually expanded (weightIcon becomes visible),
-        // and fall back to trying other indices if not.
-        let expanded = false
-        const arrowIndexCandidates = [1, 2, 3]
-
-        for (const idx of arrowIndexCandidates) {
-            const arrowXpath = `(//android.widget.Button[@text=""])[${idx}]`
-            const arrowEl = await $(arrowXpath)
-
-            if (!(await arrowEl.isExisting())) {
-                console.log(`  Arrow candidate [${idx}] does not exist on screen — trying next`)
-                continue
-            }
-
-            await arrowEl.click()
-            console.log(`  Tapped arrow candidate [${idx}] — checking if sections expanded`)
-            await driver.pause(1500)
-
-            expanded = await testBot.isVisible(selectors.weightIcon).catch(() => false)
-            if (expanded) {
-                console.log(`✓ Sections expanded successfully using arrow index [${idx}]`)
-                break
-            }
-            console.log(`  Arrow candidate [${idx}] tapped but weight icon still not visible — trying next candidate`)
-        }
-
-        if (!expanded) {
-            console.error('None of the arrow candidates expanded the sections — dumping page source')
-            await dumpPageSourceOnFailure('navigateToWeightEntryScreen - arrow expand failed')
-            throw new Error(
-                'Could not expand sections via any candidate arrow button. The XPath ' +
-                '//android.widget.Button[@text=""] is too generic for this screen — check the ' +
-                'page source dump above for the real index/resource-id of the correct arrow.'
-            )
+        // Matches the confirmed-working pattern from adhoc-signout.ts
+        // Step 3 exactly: tap the plain (unindexed) empty-text arrow
+        // button once, right away, so all sections render expanded
+        // instead of the default collapsed/scrollable grid. Non-fatal
+        // if not found — falls through to the default scrollable view,
+        // same as the proven working version.
+        try {
+            await testBot.waitUntilVisible(selectors.expandAllSectionsButton, 5000)
+            await testBot.click(selectors.expandAllSectionsButton)
+            console.log('Tapped view-toggle button — expecting all sections/notes to render expanded')
+            await driver.pause(2000)
+        } catch (toggleErr) {
+            console.warn('View-toggle button not found or tap failed — continuing with default (scrollable) view:', toggleErr)
         }
 
         await testBot.waitUntilVisible(selectors.weightIcon, 5000)
