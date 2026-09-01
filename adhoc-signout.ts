@@ -827,11 +827,44 @@ describe('Care Delivery - Dynamic Adhoc Activity Flow', () => {
             // sections/notes render expanded on one screen instead
             // of the default collapsed/scrollable grid — this
             // removes the need for per-note scroll-hunting below.
+            //
+            // Verification added: captures the button's on-screen
+            // attributes (checked/selected state, bounds) BEFORE and
+            // AFTER the tap, so we can confirm from the log whether
+            // the tap genuinely changed the button's state — rather
+            // than assuming success just because later note-finding
+            // happened to work anyway (which it can, via scrolling,
+            // even if this specific tap did nothing).
             try {
                 await testBot.waitUntilVisible(adhocSelectors.selectCareViewToggleButton, 5000)
-                await testBot.click(adhocSelectors.selectCareViewToggleButton)
+
+                const toggleBtn = await $(
+                    await (testBot as any).getLocatorTextForElement(adhocSelectors.selectCareViewToggleButton)
+                )
+
+                const attrsBefore = await toggleBtn.getAttribute('checked').catch(() => 'N/A')
+                const selectedBefore = await toggleBtn.getAttribute('selected').catch(() => 'N/A')
+                console.log(`Toggle button state BEFORE tap — checked: ${attrsBefore}, selected: ${selectedBefore}`)
+
+                await toggleBtn.click()
                 console.log('Tapped view-toggle button — expecting all sections/notes to render expanded')
                 await driver.pause(2000)
+
+                const toggleBtnAfter = await $(
+                    await (testBot as any).getLocatorTextForElement(adhocSelectors.selectCareViewToggleButton)
+                )
+                const attrsAfter = await toggleBtnAfter.getAttribute('checked').catch(() => 'N/A')
+                const selectedAfter = await toggleBtnAfter.getAttribute('selected').catch(() => 'N/A')
+                console.log(`Toggle button state AFTER tap — checked: ${attrsAfter}, selected: ${selectedAfter}`)
+
+                if (attrsBefore === attrsAfter && selectedBefore === selectedAfter) {
+                    console.warn(
+                        'Toggle button state did NOT change after tap (checked/selected identical ' +
+                        'before and after) — this tap may not be doing anything. If notes are still ' +
+                        'found below, it is likely via the scroll fallback, not because this toggle ' +
+                        'actually expanded the view.'
+                    )
+                }
             } catch (toggleErr) {
                 console.warn('View-toggle button not found or tap failed — continuing with default (scrollable) view:', toggleErr)
             }
