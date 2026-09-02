@@ -192,14 +192,15 @@ const selectors = {
         ),
     } as TestBotElement,
 
-    // Arrow beside the search icon — expands all sections at once.
-    // Confirmed working exactly as-is (plain, unindexed) in
-    // adhoc-signout.ts's Step 3 — same locator, same tap-once
-    // pattern, used identically in navigateToWeightEntryScreen()
-    // below.
+    // Green up/down arrow beside the search icon — expands all
+    // sections at once. Uses the confirmed Unicode private-use
+    // icon character for this button's @text attribute (matches
+    // the fix already applied in adhoc-flexible-categories.e2e.ts
+    // and confirmed working in adhoc-signout.ts), replacing the
+    // earlier ambiguous empty-string match.
     expandAllSectionsButton: {
         android: AndroidLocatorBuilder.xpath(
-            '//android.widget.Button[@text=""]'
+            '//android.widget.Button[@text="\uE0A4"]'
         ),
         ios: iOSLocatorBuilder.xpath(
             '//XCUIElementTypeButton[@name=""]'
@@ -466,19 +467,18 @@ async function navigateToWeightEntryScreen(): Promise<string> {
         await testBot.click(selectors.adhocButton)
         await driver.pause(2000)
 
-        // Matches the confirmed-working pattern from adhoc-signout.ts
-        // Step 3 exactly: tap the plain (unindexed) empty-text arrow
-        // button once, right away, so all sections render expanded
-        // instead of the default collapsed/scrollable grid. Non-fatal
-        // if not found — falls through to the default scrollable view,
-        // same as the proven working version.
+        // Tap the green expand-all arrow (identified by its
+        // confirmed Unicode icon character) once, right away, so
+        // all sections render expanded instead of the default
+        // collapsed/scrollable grid. Non-fatal if not found —
+        // falls through to the default scrollable view.
         try {
             await testBot.waitUntilVisible(selectors.expandAllSectionsButton, 5000)
             await testBot.click(selectors.expandAllSectionsButton)
-            console.log('Tapped view-toggle button — expecting all sections/notes to render expanded')
+            console.log('Tapped green expand-all arrow — expecting all sections to render expanded')
             await driver.pause(2000)
         } catch (toggleErr) {
-            console.warn('View-toggle button not found or tap failed — continuing with default (scrollable) view:', toggleErr)
+            console.warn('Expand-all arrow not found or tap failed — continuing with default (scrollable) view:', toggleErr)
         }
 
         await testBot.waitUntilVisible(selectors.weightIcon, 5000)
