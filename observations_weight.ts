@@ -279,6 +279,20 @@ const selectors = {
         ),
     } as TestBotElement,
 
+    // The duration grid shown after entering the weight value —
+    // matches any of the standard preset options so a real
+    // selection can be made before Continue is checked for
+    // enablement. Same container-scoping pattern proven in the
+    // adhoc flow's "10 mins" selection.
+    durationOptionsContainer: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.view.ViewGroup[@resource-id="com.personcentredsoftware.care.delivery:id/DurationField"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeOther[@name="DurationField"]'
+        ),
+    } as TestBotElement,
+
     durationEntryField: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/DurationEntry"]'
@@ -405,6 +419,74 @@ async function enterWeightValue(value: string): Promise<void> {
     } catch (kbErr) {
         console.warn('hideKeyboard failed or keyboard already hidden:', kbErr)
     }
+}
+
+// ─────────────────────────────────────────────
+// Helper — after entering the weight value, a
+// duration/timer option must ALSO be selected
+// before the Continue button becomes enabled.
+// Picks a genuinely random standard preset option
+// ("5 mins", "10 mins", "15 mins", "20 mins",
+// "30 mins", "45 mins", "60 mins") from the
+// duration grid, scrolling to find it if needed,
+// and retries a few times in case the first tap
+// doesn't register. Falls back to "Other Durations"
+// (typing a manual value) only if none of the
+// standard presets can be found on screen at all.
+// Returns true if a duration was successfully
+// selected (Continue is expected to be enabled
+// after this), false if it genuinely could not be
+// selected.
+// ─────────────────────────────────────────────
+async function selectDurationOption(): Promise<boolean> {
+    const DURATION_OPTIONS = ['5 mins', '10 mins', '15 mins', '20 mins', '30 mins', '45 mins', '60 mins']
+    const randomDuration = DURATION_OPTIONS[Math.floor(Math.random() * DURATION_OPTIONS.length)]
+    const durationXpath = `//android.view.ViewGroup[@resource-id="com.personcentredsoftware.care.delivery:id/DurationField"]//android.widget.TextView[@text="${randomDuration}"]`
+
+    console.log(`Selecting duration option: "${randomDuration}"`)
+
+    let durationEl = await $(durationXpath)
+    for (let i = 0; i < 4; i++) {
+        if (await durationEl.isExisting() && await durationEl.isDisplayed()) break
+
+        console.log(`  "${randomDuration}" not visible — scrolling to find it (attempt ${i + 1})`)
+        const { width, height } = await driver.getWindowSize()
+        await driver.execute('mobile: swipeGesture', {
+            left: Math.floor(width * 0.2),
+            top: Math.floor(height * 0.6),
+            width: Math.floor(width * 0.6),
+            height: Math.floor(height * 0.3),
+            direction: 'up',
+            percent: 0.5,
+        })
+        await driver.pause(1200)
+        durationEl = await $(durationXpath)
+    }
+
+    if (!(await durationEl.isExisting())) {
+        console.warn(`Could not find duration option "${randomDuration}" — falling back to "Other Durations"`)
+        await handleOtherDurationsIfPresent('10')
+        return await testBot.isVisible(selectors.confirmButton).catch(() => false)
+    }
+
+    let confirmEnabled = false
+    for (let attempt = 0; attempt < 3 && !confirmEnabled; attempt++) {
+        durationEl = await $(durationXpath)
+        await durationEl.click()
+        console.log(`Tapped "${randomDuration}" (attempt ${attempt + 1})`)
+        await driver.pause(1500)
+
+        const confirmBtn = await $(
+            '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/ConfirmButton"]'
+        )
+        confirmEnabled = await confirmBtn.waitForEnabled({ timeout: 5000 }).catch(() => false)
+    }
+
+    if (!confirmEnabled) {
+        console.warn(`Continue still not enabled after selecting "${randomDuration}" (tried 3 times)`)
+    }
+
+    return confirmEnabled
 }
 
 // ─────────────────────────────────────────────
@@ -582,9 +664,19 @@ describe('Resident Area Profile - Observations - Weight - SMOKE TEST', () => {
         }
     })
 
-    it('Smoke Step 5 - Handle "Other Durations" if presented, then complete the record', async function () {
+    it('Smoke Step 5 - Select a duration, verify Continue is enabled, then complete the record', async function () {
         try {
-            await handleOtherDurationsIfPresent('10')
+            const confirmEnabled = await selectDurationOption()
+            if (!confirmEnabled) {
+                throw new Error('Continue button did not become enabled after selecting a duration')
+            }
+
+            const confirmBtn = await $(
+                '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/ConfirmButton"]'
+            )
+            await confirmBtn.click()
+            console.log('Clicked Continue')
+            await driver.pause(2000)
 
             await testBot.waitUntilVisible(selectors.createRecordsButton, 10000)
             await testBot.click(selectors.createRecordsButton)
@@ -660,6 +752,7 @@ describe('Resident Area Profile - Observations - Weight - THOROUGH (Boundary Val
         try {
             await navigateToWeightEntryScreen()
             await enterWeightValue('260')
+            await selectDurationOption()
             const { baselineShown } = await checkForMessage('Thorough: baseline message check')
             console.log(`Baseline message shown: ${baselineShown} — confirm this matches expected app behaviour (locator is currently a best-guess text match; update selectors.baselineMessage once confirmed)`)
         } catch (err) {
@@ -668,13 +761,23 @@ describe('Resident Area Profile - Observations - Weight - THOROUGH (Boundary Val
         }
     })
 
-    it('Thorough Step 5 - Complete the record end-to-end with a valid value, including conditional "Other Durations"', async function () {
+    it('Thorough Step 5 - Complete the record end-to-end with a valid value and a selected duration', async function () {
         try {
             await navigateToWeightEntryScreen()
             await enterWeightValue('260')
             await driver.pause(1000)
 
-            await handleOtherDurationsIfPresent('15')
+            const confirmEnabled = await selectDurationOption()
+            if (!confirmEnabled) {
+                throw new Error('Continue button did not become enabled after selecting a duration')
+            }
+
+            const confirmBtn = await $(
+                '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/ConfirmButton"]'
+            )
+            await confirmBtn.click()
+            console.log('Clicked Continue')
+            await driver.pause(2000)
 
             await testBot.waitUntilVisible(selectors.createRecordsButton, 10000)
             await testBot.click(selectors.createRecordsButton)
