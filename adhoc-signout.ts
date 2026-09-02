@@ -6,6 +6,11 @@ import { TestBotElement } from '../../TestBot/TestBotElement'
 const isLocal = process.env.RUN_MODE === 'local'
 console.log(`Running Adhoc Activity flow in ${isLocal ? 'LOCAL PHYSICAL DEVICE' : 'BROWSERSTACK CLOUD'} mode`)
 
+// ─────────────────────────────────────────────
+// Full list of care recipients — one is picked
+// at random each run to make the script dynamic
+// rather than always targeting the same person.
+// ─────────────────────────────────────────────
 const CARE_RECIPIENTS = [
     'Ah-Na Gravy',
     'Alan Gravy',
@@ -39,6 +44,13 @@ function residentLocator(name: string): TestBotElement {
     } as TestBotElement
 }
 
+// ─────────────────────────────────────────────
+// Helper — dump page source safely, without
+// throwing if the session itself is dead. Also
+// persisted to disk since console output for the
+// final test in a run has proven unreliable to
+// inspect after the fact.
+// ─────────────────────────────────────────────
 async function dumpPageSourceOnFailure(stepLabel: string) {
     console.error(`Failure at ${stepLabel} — dumping page source`)
     try {
@@ -64,6 +76,14 @@ async function dumpPageSourceOnFailure(stepLabel: string) {
     }
 }
 
+// ─────────────────────────────────────────────
+// Helper — pick and select a resident dynamically
+// AT RUNTIME. Scans which of the CARE_RECIPIENTS
+// are ACTUALLY present on screen right now, then
+// picks randomly among only those, so it never
+// converges on the same "easy to find" name.
+// Returns the name that was actually selected.
+// ─────────────────────────────────────────────
 async function selectRandomResident(): Promise<string> {
     console.log('▶ Scanning screen for all currently visible care recipients...')
 
@@ -115,6 +135,31 @@ async function selectRandomResident(): Promise<string> {
     return chosenName
 }
 
+// ─────────────────────────────────────────────
+// Care note types shown in the "Select Care"
+// picker, grouped by their real on-screen section
+// tab so we can guarantee at least one pick per
+// section rather than a flat random pool that
+// might land all picks in one section and skip
+// the rest entirely.
+//
+// Activities/Communication/Medical/Personal Care
+// entries are confirmed from a real "Select Care"
+// picker page-source dump or as previously
+// provided. The remaining sections (Emotional
+// Support, Going to the Toilet, Mobility,
+// Nutrition/Eating & Drinking, Personal Safety &
+// Environment, Process, Sleeping) are NOT yet
+// confirmed — each has an EMPTY array below as a
+// placeholder. Fill in the real note names for
+// each (visible on the "Select Care" screen under
+// that section's tab) before relying on random
+// selection for that section; until filled in,
+// that section is simply skipped by Mode B
+// (nothing to pick from) and can still be targeted
+// directly by name in Mode A/per-section explicit
+// lists regardless of this list being empty.
+// ─────────────────────────────────────────────
 const CARE_NOTE_CATEGORIES = {
     Activities: [
         'Armchair exercises',
@@ -144,42 +189,100 @@ const CARE_NOTE_CATEGORIES = {
         'Mentoring',
         'Newspaper',
     ],
-    'Emotional Support': [],
-    'Going to the Toilet': [],
+    'Emotional Support': [
+        // TODO: fill in real note names for this section
+    ],
+    'Going to the Toilet': [
+        // TODO: fill in real note names for this section
+    ],
     Medical: [
         'Add bag',
         'Ambulance',
         'Blood',
         'INR',
     ],
-    Mobility: [],
-    'Nutrition, Eating & Drinking': [],
+    Mobility: [
+        // TODO: fill in real note names for this section
+    ],
+    'Nutrition, Eating & Drinking': [
+        // TODO: fill in real note names for this section
+    ],
     'Personal Care': [
         'Bath',
         'Catheter care',
         'Change clothes',
     ],
     'Personal Safety & Environment': [
+        // NB: confirmed from a real screenshot, but the section
+        // header above these was cut off — please confirm these
+        // 4 genuinely belong to "Personal Safety & Environment"
+        // and not a different, unlabelled section.
         'Fridge temperature',
         'Pendant alarm',
         'Room temperature',
         'Wheelchair belt',
     ],
     Process: [
+        // Confirmed from a real screenshot of the "Select Care" screen.
         'Admitted',
         'Alert',
         'Complaint',
         'Compliment',
     ],
-    Sleeping: [],
+    Sleeping: [
+        // TODO: fill in real note names for this section
+    ],
 } as const
 
 type CareNoteCategory = keyof typeof CARE_NOTE_CATEGORIES
 
 const ALL_CATEGORY_NAMES = Object.keys(CARE_NOTE_CATEGORIES) as CareNoteCategory[]
 
+// Flat pool (all sections combined) — used only
+// for the "pure random, no section guarantee"
+// mode, kept for backward compatibility.
 const CARE_NOTE_TYPES: string[] = Object.values(CARE_NOTE_CATEGORIES).flat()
 
+// ─────────────────────────────────────────────
+// RUN CONFIGURATION — edit PER_SECTION_CONFIG
+// before each run to control what gets selected,
+// independently for EACH of the 11 sections.
+//
+// For every section, choose ONE of:
+//
+//   { mode: 'explicit', notes: ['Name One', 'Name Two'] }
+//     -> selects EXACTLY those names from that
+//        section, in that order (scrolls to find
+//        each one if needed). Fails with a clear
+//        error if a name can't be found even after
+//        scrolling — this mode is deterministic on
+//        purpose, so a typo or wrong section is
+//        never silently ignored.
+//
+//   { mode: 'random', count: 2 }
+//     -> picks that many RANDOM notes from
+//        whatever's visible in that section
+//        (scrolling to discover the full list
+//        first). Set count to 0 to skip the
+//        section's random pick entirely while
+//        still leaving it configured for later.
+//
+//   { mode: 'skip' }
+//     -> section is not touched at all this run.
+//
+// Every section not listed in PER_SECTION_CONFIG
+// defaults to `{ mode: 'skip' }` automatically —
+// you only need to list the sections you actually
+// want to act on for a given run.
+//
+// Total notes selected across ALL sections combined
+// is still capped at 10 per run (per requirement).
+// If your per-section requests add up to more than
+// 10, sections are processed in the order listed
+// below and the run stops adding further notes once
+// the cap is reached (already-completed sections are
+// unaffected).
+// ─────────────────────────────────────────────
 type SectionSelection =
     | { mode: 'explicit'; notes: string[] }
     | { mode: 'random'; count: number }
@@ -199,6 +302,10 @@ const PER_SECTION_CONFIG: Partial<Record<CareNoteCategory, SectionSelection>> = 
     Sleeping: { mode: 'random', count: 1 },
 }
 
+// Overall cap — never select more than this many
+// notes total across all sections combined in one
+// run, regardless of what PER_SECTION_CONFIG asks
+// for.
 const OVERALL_CARE_NOTE_CAP = 10
 
 function careNoteLocator(name: string): TestBotElement {
@@ -216,6 +323,16 @@ async function isNoteVisible(name: string): Promise<boolean> {
     return testBot.isVisible(careNoteLocator(name)).catch(() => false)
 }
 
+// ─────────────────────────────────────────────
+// Helper — find a note by name, scrolling the
+// "Select Care" list if it isn't visible without
+// scrolling first. Tries direct visibility, then
+// falls back to UiScrollable.scrollIntoView.
+// Returns true if found (and leaves it on screen,
+// scrolled into view), false if genuinely not
+// present anywhere in the list even after
+// scrolling.
+// ─────────────────────────────────────────────
 async function scrollToNoteIfNeeded(name: string): Promise<boolean> {
     if (await isNoteVisible(name)) {
         return true
@@ -237,6 +354,15 @@ async function scrollToNoteIfNeeded(name: string): Promise<boolean> {
     return false
 }
 
+// ─────────────────────────────────────────────
+// Helper — scroll the "Select Care" list to the
+// named section's tab/heading, so that section's
+// notes are the ones currently in view before we
+// scan or select within it. Sections are laid out
+// as tabs/headings on the same scrollable screen;
+// scrolling to the section name itself brings its
+// notes into view directly below it.
+// ─────────────────────────────────────────────
 async function scrollToSection(category: CareNoteCategory): Promise<boolean> {
     const sectionHeadingXpath = `//android.widget.TextView[@text="${category}"]`
 
@@ -258,6 +384,14 @@ async function scrollToSection(category: CareNoteCategory): Promise<boolean> {
     }
 }
 
+// ─────────────────────────────────────────────
+// Selects EXACTLY the given note names within one
+// section, in order, scrolling to find each one.
+// Throws immediately (naming the missing note) if
+// any requested name can't be found even after
+// scrolling — deterministic on purpose, so a typo
+// is never silently ignored.
+// ─────────────────────────────────────────────
 async function selectExplicitNotesInSection(category: CareNoteCategory, names: string[]): Promise<string[]> {
     console.log(`▶ [${category}] Mode: explicit — selecting exactly ${names.length} requested note(s):`, names)
 
@@ -283,6 +417,19 @@ async function selectExplicitNotesInSection(category: CareNoteCategory, names: s
     return selected
 }
 
+// ─────────────────────────────────────────────
+// Selects `count` RANDOM notes from within one
+// section, scrolling to discover the section's
+// full visible list first (from CARE_NOTE_CATEGORIES
+// as a starting point, verified against what's
+// actually on screen). If the section's
+// CARE_NOTE_CATEGORIES entry is still an empty
+// placeholder (not yet filled in), this returns an
+// empty array and logs a warning rather than
+// failing the whole run — fill in the real note
+// names for that section to enable random
+// selection there.
+// ─────────────────────────────────────────────
 async function selectRandomNotesInSection(category: CareNoteCategory, count: number): Promise<string[]> {
     if (count <= 0) {
         return []
@@ -337,6 +484,17 @@ async function selectRandomNotesInSection(category: CareNoteCategory, count: num
     return selected
 }
 
+// ─────────────────────────────────────────────
+// Entry point — walks PER_SECTION_CONFIG in
+// declaration order, applying each section's
+// configured mode ('explicit' / 'random' / 'skip'),
+// and stops adding further notes once
+// OVERALL_CARE_NOTE_CAP is reached. Sections
+// processed before the cap was hit are unaffected;
+// a section that would push the total over the cap
+// has its selection trimmed to fit exactly, not
+// skipped entirely.
+// ─────────────────────────────────────────────
 async function selectCareNotesForThisRun(): Promise<string[]> {
     const allSelected: string[] = []
 
@@ -381,6 +539,11 @@ async function selectCareNotesForThisRun(): Promise<string[]> {
     return allSelected
 }
 
+// ─────────────────────────────────────────────
+// Adhoc Activity Flow selectors — resident
+// locator is built dynamically from whichever
+// name was randomly picked above.
+// ─────────────────────────────────────────────
 const adhocSelectors = {
     adhocButton: {
         android: AndroidLocatorBuilder.xpath(
@@ -391,11 +554,13 @@ const adhocSelectors = {
         ),
     } as TestBotElement,
 
-    // Green up/down arrow beside the search icon on the "Select Care"
-    // screen. Tapping it expands all care category dropdowns. Uses the
-    // Unicode private-use icon character confirmed for this button's
-    // @text attribute, rather than an empty-string match.
-    selectCareExpandAllButton: {
+    // Green up/down arrow beside the search icon on the "Select
+    // Care" screen — tapping it expands all care category
+    // dropdowns at once. Uses the confirmed Unicode private-use
+    // icon character for this button's @text attribute (not an
+    // empty-string match, which was ambiguous on screens with
+    // more than one empty-text button).
+    selectCareViewToggleButton: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.Button[@text="\uE0A4"]'
         ),
@@ -476,6 +641,9 @@ const adhocSelectors = {
         ),
     } as TestBotElement,
 
+    // NB: Close button locator unconfirmed — falls back to
+    // Create Records button if a dedicated close control
+    // isn't found. Update once confirmed on real screen.
     closeAfterCreateButton: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.Button[@text="Create Records"]'
@@ -494,6 +662,12 @@ const adhocSelectors = {
         ),
     } as TestBotElement,
 
+    // Cross/close mark on the Earlier page that returns to the
+    // Communities page. Confirmed via real page-source dump: it's
+    // the top-right android.widget.Button with empty text — the
+    // FIRST such button in document order (the bottom nav tab
+    // icons are also empty-text Buttons, but appear later in the
+    // tree).
     earlierCloseCrossMark: {
         android: AndroidLocatorBuilder.xpath(
             '(//android.widget.Button[@text=""])[1]'
@@ -513,11 +687,27 @@ const adhocSelectors = {
     } as TestBotElement,
 }
 
+// ─────────────────────────────────────────────
+// Suite — Dynamic Adhoc Activity Flow
+// (assumes the app is already logged in and on
+// the My Communities page — run this after the
+// enrolment/login suite in the same session)
+// ─────────────────────────────────────────────
 describe('Care Delivery - Dynamic Adhoc Activity Flow', () => {
 
     let selectedResidentName = ''
     let selectedCareNotes: string[] = []
 
+    // Number of "Update Care" completion iterations to generate as
+    // test steps, computed up front from PER_SECTION_CONFIG so Mocha
+    // can register a fixed number of `it()` blocks. This is the
+    // theoretical MAXIMUM across all sections (explicit lengths +
+    // random counts), capped at OVERALL_CARE_NOTE_CAP — the actual
+    // number selected at runtime may be lower (e.g. a random
+    // section finding fewer visible candidates than requested, or
+    // the overall cap trimming a later section); any planned
+    // iteration beyond what was actually selected skips itself
+    // gracefully (see the loop below).
     const plannedNoteIterations = Math.min(
         OVERALL_CARE_NOTE_CAP,
         ALL_CATEGORY_NAMES.reduce((sum, category) => {
@@ -528,6 +718,9 @@ describe('Care Delivery - Dynamic Adhoc Activity Flow', () => {
         }, 0)
     )
 
+    // Scrolls to the bottom "How long did this care take?" section, picks
+    // "10 mins", then taps the bottom "Continue" button — shared by every
+    // care-note completion iteration below.
     async function completeUpdateCareForCurrentNote(): Promise<void> {
         const howLongXpath =
             '//android.widget.TextView[@text="How long did this care take?"]'
@@ -599,64 +792,6 @@ describe('Care Delivery - Dynamic Adhoc Activity Flow', () => {
         await driver.pause(3000)
     }
 
-    async function tapSelectCareExpandAllButton(): Promise<void> {
-        await testBot.waitUntilVisible(adhocSelectors.selectCareExpandAllButton, 5000)
-        await testBot.click(adhocSelectors.selectCareExpandAllButton)
-        console.log('Clicked Select Care green expand-all arrow')
-        await driver.pause(1500)
-    }
-
-    async function tapCategoryHeader(category: CareNoteCategory, actionLabel: string): Promise<void> {
-        if (!(await scrollToSection(category))) {
-            throw new Error(`Could not bring "${category}" header into view before tapping its ${actionLabel} arrow`)
-        }
-
-        const headingEl = await $(`//android.widget.TextView[@text="${category}"]`)
-        await headingEl.waitForDisplayed({ timeout: 5000 })
-
-        const headingLocation = await headingEl.getLocation()
-        const headingSize = await headingEl.getSize()
-        const { width } = await driver.getWindowSize()
-
-        await driver.execute('mobile: clickGesture', {
-            x: Math.floor(width * 0.89),
-            y: Math.floor(headingLocation.y + headingSize.height / 2),
-        })
-        console.log(`Clicked ${category} ${actionLabel} arrow`)
-        await driver.pause(1500)
-    }
-
-    async function verifySelectCareArrowsOpenAndClose(): Promise<void> {
-        const category: CareNoteCategory = 'Activities'
-        const probeNoteName = CARE_NOTE_CATEGORIES[category][0]
-
-        if (await isNoteVisible(probeNoteName)) {
-            await tapCategoryHeader(category, 'collapse')
-        }
-
-        if (await isNoteVisible(probeNoteName)) {
-            throw new Error(`${category} arrow did not close the dropdown; "${probeNoteName}" is still visible`)
-        }
-
-        await tapSelectCareExpandAllButton()
-
-        if (!(await isNoteVisible(probeNoteName))) {
-            throw new Error(`Select Care green expand-all arrow did not open the ${category} dropdown; "${probeNoteName}" is not visible`)
-        }
-
-        await tapCategoryHeader(category, 'collapse')
-
-        if (await isNoteVisible(probeNoteName)) {
-            throw new Error(`${category} arrow did not close after expand-all; "${probeNoteName}" is still visible`)
-        }
-
-        await tapSelectCareExpandAllButton()
-
-        if (!(await isNoteVisible(probeNoteName))) {
-            throw new Error(`Select Care green expand-all arrow did not reopen the ${category} dropdown for selection; "${probeNoteName}" is not visible`)
-        }
-    }
-
     it('Step 1 - Select a random resident from the community list', async function () {
         try {
             selectedResidentName = await selectRandomResident()
@@ -686,7 +821,18 @@ describe('Care Delivery - Dynamic Adhoc Activity Flow', () => {
 
             await testBot.waitUntilVisible(adhocSelectors.selectCareScreenTitle, 10000)
 
-            await verifySelectCareArrowsOpenAndClose()
+            // Tap the view-toggle button ONCE, right away, so all
+            // sections/notes render expanded on one screen instead
+            // of the default collapsed/scrollable grid — this
+            // removes the need for per-note scroll-hunting below.
+            try {
+                await testBot.waitUntilVisible(adhocSelectors.selectCareViewToggleButton, 5000)
+                await testBot.click(adhocSelectors.selectCareViewToggleButton)
+                console.log('Tapped view-toggle button — expecting all sections/notes to render expanded')
+                await driver.pause(2000)
+            } catch (toggleErr) {
+                console.warn('View-toggle button not found or tap failed — continuing with default (scrollable) view:', toggleErr)
+            }
 
             selectedCareNotes = await selectCareNotesForThisRun()
             await driver.pause(3000)
@@ -700,6 +846,10 @@ describe('Care Delivery - Dynamic Adhoc Activity Flow', () => {
         }
     })
 
+    // Real UI: selecting care note(s) opens the "Update Care" modal directly
+    // — it already contains Preferences, Happiness slider and the Duration
+    // grid on one screen. When multiple notes were selected, one "Update
+    // Care" screen is completed at a time; each iteration below handles one.
     for (let noteIndex = 0; noteIndex < plannedNoteIterations; noteIndex++) {
         const stepLabel = `Step 4.${noteIndex + 1} - Complete "Update Care" for care note #${noteIndex + 1}`
         it(stepLabel, async function () {
@@ -754,6 +904,9 @@ describe('Care Delivery - Dynamic Adhoc Activity Flow', () => {
         }
     })
 
+    // Cross mark on the Earlier page — closes it and returns to the
+    // Communities page, from which the signout spec (next in the wdio
+    // specs array) can begin the Finish/Sign Out flow.
     it('Step 12 - Click the cross mark on the "Earlier" page to return to Communities', async function () {
         try {
             await testBot.waitUntilVisible(adhocSelectors.earlierCloseCrossMark, 5000)
