@@ -531,6 +531,104 @@ async function handleOtherDurationsIfPresent(minutesValue: string): Promise<void
 // thorough suites below to avoid duplicating the
 // same 6 steps twice.
 // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// Navigates from wherever the Weight entry flow
+// left off (Earlier tab / Communities page) back
+// to the same named resident's profile, then
+// through Adhoc -> expand-all -> Weigh -> Next,
+// landing on the weight input field again. Used
+// to re-enter the flow for each boundary-value
+// test case WITHOUT picking a new random resident
+// each time — the whole Thorough suite runs
+// against a single resident selected once at the
+// very start.
+// ─────────────────────────────────────────────
+async function returnToWeightEntryScreenForResident(residentName: string): Promise<void> {
+    try {
+        const locator = residentLocator(residentName)
+
+        let residentFound = await testBot.isVisible(locator).catch(() => false)
+        if (!residentFound) {
+            console.log(`"${residentName}" not immediately visible — scrolling to find them again`)
+            try {
+                const scrolled = await $(
+                    'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
+                    `.scrollIntoView(new UiSelector().textMatches("^${residentName}$"))`
+                )
+                residentFound = await scrolled.isExisting()
+            } catch (scrollErr) {
+                console.warn(`Scroll-to-find "${residentName}" failed:`, scrollErr)
+            }
+        }
+
+        if (!residentFound) {
+            await dumpPageSourceOnFailure(`returnToWeightEntryScreenForResident - "${residentName}" not found`)
+            throw new Error(`Could not find resident "${residentName}" again on the Communities page`)
+        }
+
+        await testBot.click(locator)
+        console.log(`Re-selected resident: "${residentName}"`)
+        await driver.pause(2000)
+
+        await testBot.waitUntilVisible(selectors.adhocButton, 5000)
+        await testBot.click(selectors.adhocButton)
+        await driver.pause(2000)
+
+        try {
+            await testBot.waitUntilVisible(selectors.expandAllSectionsButton, 5000)
+            await testBot.click(selectors.expandAllSectionsButton)
+            console.log('Tapped green expand-all arrow — expecting all sections to render expanded')
+            await driver.pause(2000)
+        } catch (toggleErr) {
+            console.warn('Expand-all arrow not found or tap failed — continuing with default (scrollable) view:', toggleErr)
+        }
+
+        let weighFound = await testBot.isVisible(selectors.weighText).catch(() => false)
+
+        if (!weighFound) {
+            console.log('"Weigh" not immediately visible — scrolling to find it')
+            try {
+                const scrolled = await $(
+                    'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
+                    '.scrollIntoView(new UiSelector().textMatches("^Weigh$"))'
+                )
+                weighFound = await scrolled.isExisting()
+            } catch (scrollErr) {
+                console.warn('Scroll-to-find "Weigh" failed:', scrollErr)
+            }
+        }
+
+        if (!weighFound) {
+            await dumpPageSourceOnFailure('returnToWeightEntryScreenForResident - Weigh not found')
+            throw new Error('Could not find "Weigh" option on screen, even after scrolling')
+        }
+
+        await testBot.waitUntilVisible(selectors.weighText, 5000)
+        await testBot.click(selectors.weighText)
+        console.log('Selected "Weigh"')
+        await driver.pause(1000)
+
+        await testBot.waitUntilVisible(selectors.nextButton, 5000)
+        await testBot.click(selectors.nextButton)
+        await driver.pause(2000)
+
+        await testBot.waitUntilVisible(selectors.weightInputField, 10000)
+        console.log('Reached weight input field')
+    } catch (err) {
+        await dumpPageSourceOnFailure('returnToWeightEntryScreenForResident')
+        throw err
+    }
+}
+
+// ─────────────────────────────────────────────
+// Used ONCE, at the very start of the suite, to
+// pick the single resident the whole run will use,
+// and navigate to the Weight entry screen for the
+// first time. Every subsequent test case re-enters
+// the flow via returnToWeightEntryScreenForResident()
+// with the SAME name — no new random resident is
+// ever picked mid-suite.
+// ─────────────────────────────────────────────
 async function navigateToWeightEntryScreen(): Promise<string> {
     let selectedResident = ''
 
@@ -708,9 +806,17 @@ describe('Resident Area Profile - Observations - Weight - SMOKE TEST', () => {
 // ═══════════════════════════════════════════════
 describe('Resident Area Profile - Observations - Weight - THOROUGH (Boundary Value Analysis)', () => {
 
-    it('Thorough Step 1 - Leaving value blank shows expected validation', async function () {
+    // Picked ONCE in Step 1 below, then reused by every
+    // subsequent test case in this suite — no new random
+    // resident is ever selected mid-suite. All boundary
+    // values are tested against this single resident.
+    let residentName = ''
+
+    it('Thorough Step 1 - Select one resident, then verify leaving value blank shows expected validation', async function () {
         try {
-            await navigateToWeightEntryScreen()
+            residentName = await navigateToWeightEntryScreen()
+            console.log(`▶ This entire Thorough suite will run against resident: "${residentName}"`)
+
             await enterWeightValue(BLANK_VALUE)
             const { validationShown } = await checkForMessage('Thorough: blank value')
             expect(validationShown).toBe(true)
@@ -723,7 +829,7 @@ describe('Resident Area Profile - Observations - Weight - THOROUGH (Boundary Val
     BOUNDARY_INVALID_VALUES.forEach((invalidValue, index) => {
         it(`Thorough Step 2.${index + 1} - Invalid value "${invalidValue}" shows expected validation`, async function () {
             try {
-                await navigateToWeightEntryScreen()
+                await returnToWeightEntryScreenForResident(residentName)
                 await enterWeightValue(invalidValue)
                 const { validationShown } = await checkForMessage(`Thorough: invalid value "${invalidValue}"`)
                 expect(validationShown).toBe(true)
@@ -737,7 +843,7 @@ describe('Resident Area Profile - Observations - Weight - THOROUGH (Boundary Val
     BOUNDARY_VALID_VALUES.forEach((validValue, index) => {
         it(`Thorough Step 3.${index + 1} - Valid boundary value "${validValue}" is accepted without error`, async function () {
             try {
-                await navigateToWeightEntryScreen()
+                await returnToWeightEntryScreenForResident(residentName)
                 await enterWeightValue(validValue)
                 const { validationShown } = await checkForMessage(`Thorough: valid value "${validValue}"`)
                 expect(validationShown).toBe(false)
@@ -750,7 +856,7 @@ describe('Resident Area Profile - Observations - Weight - THOROUGH (Boundary Val
 
     it('Thorough Step 4 - Baseline message displays as expected for a valid entry', async function () {
         try {
-            await navigateToWeightEntryScreen()
+            await returnToWeightEntryScreenForResident(residentName)
             await enterWeightValue('260')
             await selectDurationOption()
             const { baselineShown } = await checkForMessage('Thorough: baseline message check')
@@ -763,7 +869,7 @@ describe('Resident Area Profile - Observations - Weight - THOROUGH (Boundary Val
 
     it('Thorough Step 5 - Complete the record end-to-end with a valid value and a selected duration', async function () {
         try {
-            await navigateToWeightEntryScreen()
+            await returnToWeightEntryScreenForResident(residentName)
             await enterWeightValue('260')
             await driver.pause(1000)
 
