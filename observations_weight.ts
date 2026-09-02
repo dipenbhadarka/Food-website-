@@ -344,6 +344,19 @@ const selectors = {
         ),
     } as TestBotElement,
 
+    // Confirms the app has actually landed back on the
+    // Communities page after Close is tapped on the Earlier
+    // page — same locator proven in the adhoc flow's final
+    // "back to Communities" verification step.
+    myCommunitiesTab: {
+        android: AndroidLocatorBuilder.xpath(
+            '//*[@text="My Communities"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//*[@name="My Communities"]'
+        ),
+    } as TestBotElement,
+
     // ── NOT PROVIDED — placeholders below ──
     // The PBI explicitly requires testing "Displaying baseline
     // messages", but no locator was given for what that message
@@ -780,14 +793,18 @@ describe('Resident Area Profile - Observations - Weight - SMOKE TEST', () => {
             await testBot.click(selectors.createRecordsButton)
             await driver.pause(2000)
 
+            // Go to the Earlier page first, then Close from there,
+            // and confirm we're redirected back to Communities.
+            await testBot.waitUntilVisible(selectors.earlierTab, 10000)
+            await testBot.click(selectors.earlierTab)
+            await driver.pause(2000)
+
             await testBot.waitUntilVisible(selectors.closeButton, 5000)
             await testBot.click(selectors.closeButton)
             await driver.pause(2000)
 
-            await testBot.waitUntilVisible(selectors.earlierTab, 10000)
-            await testBot.click(selectors.earlierTab)
-            await driver.pause(2000)
-            console.log('Smoke test complete — record created and Earlier tab opened')
+            await testBot.waitUntilVisible(selectors.myCommunitiesTab, 30000)
+            console.log('Smoke test complete — record created, Earlier page closed, redirected back to Communities')
         } catch (err) {
             await dumpPageSourceOnFailure('Smoke Step 5')
             throw err
@@ -889,14 +906,18 @@ describe('Resident Area Profile - Observations - Weight - THOROUGH (Boundary Val
             await testBot.click(selectors.createRecordsButton)
             await driver.pause(2000)
 
+            // Go to the Earlier page first, then Close from there,
+            // and confirm we're redirected back to Communities.
+            await testBot.waitUntilVisible(selectors.earlierTab, 10000)
+            await testBot.click(selectors.earlierTab)
+            await driver.pause(2000)
+
             await testBot.waitUntilVisible(selectors.closeButton, 5000)
             await testBot.click(selectors.closeButton)
             await driver.pause(2000)
 
-            await testBot.waitUntilVisible(selectors.earlierTab, 10000)
-            await testBot.click(selectors.earlierTab)
-            await driver.pause(2000)
-            console.log('Thorough test complete — record created and Earlier tab opened')
+            await testBot.waitUntilVisible(selectors.myCommunitiesTab, 30000)
+            console.log('Thorough test complete — record created, Earlier page closed, redirected back to Communities')
         } catch (err) {
             await dumpPageSourceOnFailure('Thorough Step 5 (end-to-end)')
             throw err
