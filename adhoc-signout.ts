@@ -6,10 +6,31 @@ import { TestBotElement } from '../../TestBot/TestBotElement'
 const isLocal = process.env.RUN_MODE === 'local'
 console.log(`Running Adhoc Activity flow in ${isLocal ? 'LOCAL PHYSICAL DEVICE' : 'BROWSERSTACK CLOUD'} mode`)
 
+// ═══════════════════════════════════════════════
+// CONFIGURATION — set this ONE value before running
+// to control care note selection. Everything else
+// in the flow is unchanged.
+//
+//   'one-per-section'  -> Step 4 picks exactly ONE
+//                         random note from EACH
+//                         expanded section (matches
+//                         the demonstrated flow
+//                         literally).
+//
+//   1, 3, 5, etc.       -> picks that many notes
+//                         TOTAL, drawn randomly from
+//                         across all sections combined
+//                         (not one-per-section), capped
+//                         at 10 regardless of the value
+//                         set here.
+// ═══════════════════════════════════════════════
+const CARE_NOTE_COUNT: number | 'one-per-section' = 'one-per-section'
+
+const OVERALL_CARE_NOTE_CAP = 10
+
 // ─────────────────────────────────────────────
-// Full list of care recipients — one is picked
-// at random each run to make the script dynamic
-// rather than always targeting the same person.
+// Full list of care recipients — Step 1 picks one
+// at random each run.
 // ─────────────────────────────────────────────
 const CARE_RECIPIENTS = [
     'Ah-Na Gravy',
@@ -46,10 +67,7 @@ function residentLocator(name: string): TestBotElement {
 
 // ─────────────────────────────────────────────
 // Helper — dump page source safely, without
-// throwing if the session itself is dead. Also
-// persisted to disk since console output for the
-// final test in a run has proven unreliable to
-// inspect after the fact.
+// throwing if the session itself is dead.
 // ─────────────────────────────────────────────
 async function dumpPageSourceOnFailure(stepLabel: string) {
     console.error(`Failure at ${stepLabel} — dumping page source`)
@@ -77,15 +95,11 @@ async function dumpPageSourceOnFailure(stepLabel: string) {
 }
 
 // ─────────────────────────────────────────────
-// Helper — pick and select a resident dynamically
-// AT RUNTIME. Scans which of the CARE_RECIPIENTS
-// are ACTUALLY present on screen right now, then
-// picks randomly among only those, so it never
-// converges on the same "easy to find" name.
-// Returns the name that was actually selected.
+// STEP 1 — select any random resident from
+// communities list.
 // ─────────────────────────────────────────────
 async function selectRandomResident(): Promise<string> {
-    console.log('▶ Scanning screen for all currently visible care recipients...')
+    console.log('▶ Step 1: Scanning screen for all currently visible care recipients...')
 
     const visibleCandidates: string[] = []
 
@@ -120,7 +134,7 @@ async function selectRandomResident(): Promise<string> {
         }
 
         console.error('None of the care recipients in the list were found on screen — dumping page source')
-        await dumpPageSourceOnFailure('selectRandomResident (no candidate found)')
+        await dumpPageSourceOnFailure('Step 1 (no candidate found)')
         throw new Error('Could not select any resident from the full CARE_RECIPIENTS list — none were visible on screen')
     }
 
@@ -136,29 +150,17 @@ async function selectRandomResident(): Promise<string> {
 }
 
 // ─────────────────────────────────────────────
-// Care note types shown in the "Select Care"
-// picker, grouped by their real on-screen section
-// tab so we can guarantee at least one pick per
-// section rather than a flat random pool that
-// might land all picks in one section and skip
-// the rest entirely.
-//
-// Activities/Communication/Medical/Personal Care
-// entries are confirmed from a real "Select Care"
-// picker page-source dump or as previously
-// provided. The remaining sections (Emotional
-// Support, Going to the Toilet, Mobility,
-// Nutrition/Eating & Drinking, Personal Safety &
-// Environment, Process, Sleeping) are NOT yet
-// confirmed — each has an EMPTY array below as a
-// placeholder. Fill in the real note names for
-// each (visible on the "Select Care" screen under
-// that section's tab) before relying on random
-// selection for that section; until filled in,
-// that section is simply skipped by Mode B
-// (nothing to pick from) and can still be targeted
-// directly by name in Mode A/per-section explicit
-// lists regardless of this list being empty.
+// Care note names, grouped by their on-screen
+// section, used for the random selection logic in
+// Step 4. Activities/Communication/Medical/Personal
+// Care/Personal Safety & Environment/Process are
+// confirmed from real screenshots or page-source
+// dumps. The remaining sections (Emotional Support,
+// Going to the Toilet, Mobility, Nutrition Eating &
+// Drinking, Sleeping) are still empty placeholders
+// — fill in real note names for each once confirmed,
+// otherwise Step 4 skips picking from that section
+// (logs a warning) since it has nothing to pick from.
 // ─────────────────────────────────────────────
 const CARE_NOTE_CATEGORIES = {
     Activities: [
@@ -213,17 +215,12 @@ const CARE_NOTE_CATEGORIES = {
         'Change clothes',
     ],
     'Personal Safety & Environment': [
-        // NB: confirmed from a real screenshot, but the section
-        // header above these was cut off — please confirm these
-        // 4 genuinely belong to "Personal Safety & Environment"
-        // and not a different, unlabelled section.
         'Fridge temperature',
         'Pendant alarm',
         'Room temperature',
         'Wheelchair belt',
     ],
     Process: [
-        // Confirmed from a real screenshot of the "Select Care" screen.
         'Admitted',
         'Alert',
         'Complaint',
@@ -238,75 +235,7 @@ type CareNoteCategory = keyof typeof CARE_NOTE_CATEGORIES
 
 const ALL_CATEGORY_NAMES = Object.keys(CARE_NOTE_CATEGORIES) as CareNoteCategory[]
 
-// Flat pool (all sections combined) — used only
-// for the "pure random, no section guarantee"
-// mode, kept for backward compatibility.
 const CARE_NOTE_TYPES: string[] = Object.values(CARE_NOTE_CATEGORIES).flat()
-
-// ─────────────────────────────────────────────
-// RUN CONFIGURATION — edit PER_SECTION_CONFIG
-// before each run to control what gets selected,
-// independently for EACH of the 11 sections.
-//
-// For every section, choose ONE of:
-//
-//   { mode: 'explicit', notes: ['Name One', 'Name Two'] }
-//     -> selects EXACTLY those names from that
-//        section, in that order (scrolls to find
-//        each one if needed). Fails with a clear
-//        error if a name can't be found even after
-//        scrolling — this mode is deterministic on
-//        purpose, so a typo or wrong section is
-//        never silently ignored.
-//
-//   { mode: 'random', count: 2 }
-//     -> picks that many RANDOM notes from
-//        whatever's visible in that section
-//        (scrolling to discover the full list
-//        first). Set count to 0 to skip the
-//        section's random pick entirely while
-//        still leaving it configured for later.
-//
-//   { mode: 'skip' }
-//     -> section is not touched at all this run.
-//
-// Every section not listed in PER_SECTION_CONFIG
-// defaults to `{ mode: 'skip' }` automatically —
-// you only need to list the sections you actually
-// want to act on for a given run.
-//
-// Total notes selected across ALL sections combined
-// is still capped at 10 per run (per requirement).
-// If your per-section requests add up to more than
-// 10, sections are processed in the order listed
-// below and the run stops adding further notes once
-// the cap is reached (already-completed sections are
-// unaffected).
-// ─────────────────────────────────────────────
-type SectionSelection =
-    | { mode: 'explicit'; notes: string[] }
-    | { mode: 'random'; count: number }
-    | { mode: 'skip' }
-
-const PER_SECTION_CONFIG: Partial<Record<CareNoteCategory, SectionSelection>> = {
-    Activities: { mode: 'random', count: 1 },
-    Communication: { mode: 'random', count: 1 },
-    'Emotional Support': { mode: 'random', count: 1 },
-    'Going to the Toilet': { mode: 'random', count: 1 },
-    Medical: { mode: 'random', count: 1 },
-    Mobility: { mode: 'random', count: 1 },
-    'Nutrition, Eating & Drinking': { mode: 'random', count: 1 },
-    'Personal Care': { mode: 'random', count: 1 },
-    'Personal Safety & Environment': { mode: 'random', count: 1 },
-    Process: { mode: 'random', count: 1 },
-    Sleeping: { mode: 'random', count: 1 },
-}
-
-// Overall cap — never select more than this many
-// notes total across all sections combined in one
-// run, regardless of what PER_SECTION_CONFIG asks
-// for.
-const OVERALL_CARE_NOTE_CAP = 10
 
 function careNoteLocator(name: string): TestBotElement {
     return {
@@ -324,248 +253,118 @@ async function isNoteVisible(name: string): Promise<boolean> {
 }
 
 // ─────────────────────────────────────────────
-// Helper — find a note by name, scrolling the
-// "Select Care" list if it isn't visible without
-// scrolling first. Tries direct visibility, then
-// falls back to UiScrollable.scrollIntoView.
-// Returns true if found (and leaves it on screen,
-// scrolled into view), false if genuinely not
-// present anywhere in the list even after
-// scrolling.
+// STEP 4 (one-per-section mode) — picks exactly
+// one random note from each section that has at
+// least one candidate currently visible (sections
+// were already expanded in Step 3, so no scrolling
+// is attempted here — matches the demonstrated flow
+// literally: pick from what's visible after
+// expanding).
 // ─────────────────────────────────────────────
-async function scrollToNoteIfNeeded(name: string): Promise<boolean> {
-    if (await isNoteVisible(name)) {
-        return true
-    }
-
-    console.log(`  "${name}" not visible without scrolling — scrolling to find it`)
-    try {
-        const scrolled = await $(
-            'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
-            `.scrollIntoView(new UiSelector().textMatches("^${name}$"))`
-        )
-        if (await scrolled.isExisting()) {
-            return true
-        }
-    } catch (err) {
-        console.warn(`  UiScrollable scroll for "${name}" failed:`, err)
-    }
-
-    return false
-}
-
-// ─────────────────────────────────────────────
-// Helper — scroll the "Select Care" list to the
-// named section's tab/heading, so that section's
-// notes are the ones currently in view before we
-// scan or select within it. Sections are laid out
-// as tabs/headings on the same scrollable screen;
-// scrolling to the section name itself brings its
-// notes into view directly below it.
-// ─────────────────────────────────────────────
-async function scrollToSection(category: CareNoteCategory): Promise<boolean> {
-    const sectionHeadingXpath = `//android.widget.TextView[@text="${category}"]`
-
-    const headingEl = await $(sectionHeadingXpath)
-    if (await headingEl.isExisting() && await headingEl.isDisplayed()) {
-        return true
-    }
-
-    console.log(`  Scrolling to section heading "${category}"...`)
-    try {
-        const scrolled = await $(
-            'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
-            `.scrollIntoView(new UiSelector().textMatches("^${category}$"))`
-        )
-        return await scrolled.isExisting()
-    } catch (err) {
-        console.warn(`  Could not scroll to section "${category}":`, err)
-        return false
-    }
-}
-
-// ─────────────────────────────────────────────
-// Selects EXACTLY the given note names within one
-// section, in order, scrolling to find each one.
-// Throws immediately (naming the missing note) if
-// any requested name can't be found even after
-// scrolling — deterministic on purpose, so a typo
-// is never silently ignored.
-// ─────────────────────────────────────────────
-async function selectExplicitNotesInSection(category: CareNoteCategory, names: string[]): Promise<string[]> {
-    console.log(`▶ [${category}] Mode: explicit — selecting exactly ${names.length} requested note(s):`, names)
-
-    await scrollToSection(category)
+async function selectOneRandomNotePerSection(): Promise<string[]> {
+    console.log('▶ Step 4: selecting ONE random care note from EACH expanded section')
 
     const selected: string[] = []
-    for (const name of names) {
-        const found = await scrollToNoteIfNeeded(name)
-        if (!found) {
-            await dumpPageSourceOnFailure(`selectExplicitNotesInSection (${category}: missing "${name}")`)
-            throw new Error(
-                `Requested care note "${name}" (section "${category}") was not found on the ` +
-                `"Select Care" screen, even after scrolling. Check spelling — it must match ` +
-                `exactly what's shown on screen — and that it actually belongs to this section.`
-            )
+
+    for (const category of ALL_CATEGORY_NAMES) {
+        if (selected.length >= OVERALL_CARE_NOTE_CAP) {
+            console.log(`▶ [${category}] Overall cap (${OVERALL_CARE_NOTE_CAP}) reached — skipping remaining sections`)
+            break
         }
-        await testBot.click(careNoteLocator(name))
-        console.log(`▶ [${category}] Selected: "${name}"`)
-        selected.push(name)
+
+        const knownNames = CARE_NOTE_CATEGORIES[category] as readonly string[]
+        if (knownNames.length === 0) {
+            console.warn(`▶ [${category}] No known note names configured yet for this section — skipping`)
+            continue
+        }
+
+        const visibleCandidates: string[] = []
+        for (const name of knownNames) {
+            if (await isNoteVisible(name)) {
+                visibleCandidates.push(name)
+            }
+        }
+
+        if (visibleCandidates.length === 0) {
+            console.warn(`▶ [${category}] No candidates currently visible — skipping this section`)
+            continue
+        }
+
+        const chosen = visibleCandidates[Math.floor(Math.random() * visibleCandidates.length)]
+        await testBot.click(careNoteLocator(chosen))
+        console.log(`▶ [${category}] Selected: "${chosen}"`)
+        selected.push(chosen)
         await driver.pause(500)
     }
 
+    console.log(`▶ Total care notes selected (one-per-section, ${selected.length}):`, selected)
     return selected
 }
 
 // ─────────────────────────────────────────────
-// Selects `count` RANDOM notes from within one
-// section, scrolling to discover the section's
-// full visible list first (from CARE_NOTE_CATEGORIES
-// as a starting point, verified against what's
-// actually on screen). If the section's
-// CARE_NOTE_CATEGORIES entry is still an empty
-// placeholder (not yet filled in), this returns an
-// empty array and logs a warning rather than
-// failing the whole run — fill in the real note
-// names for that section to enable random
-// selection there.
+// STEP 4 (fixed-count mode) — picks the given
+// number of random notes TOTAL from whatever is
+// currently visible across all sections combined
+// (sections already expanded in Step 3).
 // ─────────────────────────────────────────────
-async function selectRandomNotesInSection(category: CareNoteCategory, count: number): Promise<string[]> {
-    if (count <= 0) {
-        return []
-    }
-
-    const knownNames = CARE_NOTE_CATEGORIES[category] as readonly string[]
-    if (knownNames.length === 0) {
-        console.warn(
-            `▶ [${category}] Mode: random — SKIPPED. No known note names configured for this ` +
-            `section yet (CARE_NOTE_CATEGORIES['${category}'] is empty). Fill in the real note ` +
-            `names for this section, or use { mode: 'explicit', notes: [...] } instead.`
-        )
-        return []
-    }
-
-    console.log(`▶ [${category}] Mode: random — selecting up to ${count} note(s) from ${knownNames.length} known candidate(s)`)
-
-    await scrollToSection(category)
+async function selectFixedCountRandomNotes(requestedCount: number): Promise<string[]> {
+    const cappedRequest = Math.min(requestedCount, OVERALL_CARE_NOTE_CAP)
+    console.log(`▶ Step 4: selecting ${cappedRequest} random care note(s) total across all expanded sections`)
 
     const visibleCandidates: string[] = []
-    for (const candidateName of knownNames) {
-        const found = await scrollToNoteIfNeeded(candidateName)
-        if (found) {
-            visibleCandidates.push(candidateName)
+    for (const name of CARE_NOTE_TYPES) {
+        if (await isNoteVisible(name)) {
+            visibleCandidates.push(name)
         }
     }
 
-    console.log(`  [${category}] ${visibleCandidates.length} visible candidate(s):`, visibleCandidates)
+    console.log(`▶ Found ${visibleCandidates.length} visible candidate(s) across all sections:`, visibleCandidates)
 
     if (visibleCandidates.length === 0) {
-        console.warn(`  [${category}] No candidates found visible on screen — skipping this section`)
-        return []
+        await dumpPageSourceOnFailure('Step 4 (no candidate found)')
+        throw new Error('Could not find any visible care note across all sections after expanding')
     }
 
-    const cappedCount = Math.min(count, visibleCandidates.length)
+    const cappedCount = Math.min(cappedRequest, visibleCandidates.length)
     const shuffled = [...visibleCandidates].sort(() => Math.random() - 0.5)
     const chosenNames = shuffled.slice(0, cappedCount)
 
     const selected: string[] = []
     for (const name of chosenNames) {
-        const found = await scrollToNoteIfNeeded(name)
-        if (!found) {
-            console.warn(`  [${category}] "${name}" was visible during scan but not found when re-scrolling to select it — skipping`)
-            continue
-        }
         await testBot.click(careNoteLocator(name))
-        console.log(`▶ [${category}] Selected: "${name}"`)
+        console.log(`▶ Selected: "${name}"`)
         selected.push(name)
         await driver.pause(500)
     }
 
+    console.log(`▶ Total care notes selected (fixed count, ${selected.length}):`, selected)
     return selected
 }
 
 // ─────────────────────────────────────────────
-// Entry point — walks PER_SECTION_CONFIG in
-// declaration order, applying each section's
-// configured mode ('explicit' / 'random' / 'skip'),
-// and stops adding further notes once
-// OVERALL_CARE_NOTE_CAP is reached. Sections
-// processed before the cap was hit are unaffected;
-// a section that would push the total over the cap
-// has its selection trimmed to fit exactly, not
-// skipped entirely.
+// Entry point for Step 4 — dispatches to whichever
+// mode CARE_NOTE_COUNT is set to at the top of this
+// file.
 // ─────────────────────────────────────────────
 async function selectCareNotesForThisRun(): Promise<string[]> {
-    const allSelected: string[] = []
-
-    for (const category of ALL_CATEGORY_NAMES) {
-        const config = PER_SECTION_CONFIG[category] ?? { mode: 'skip' }
-
-        if (allSelected.length >= OVERALL_CARE_NOTE_CAP) {
-            console.log(`▶ [${category}] Overall cap (${OVERALL_CARE_NOTE_CAP}) already reached — skipping remaining sections`)
-            break
-        }
-
-        const remainingBudget = OVERALL_CARE_NOTE_CAP - allSelected.length
-
-        if (config.mode === 'skip') {
-            console.log(`▶ [${category}] Mode: skip`)
-            continue
-        }
-
-        if (config.mode === 'explicit') {
-            const namesToRequest = config.notes.slice(0, remainingBudget)
-            if (namesToRequest.length < config.notes.length) {
-                console.warn(
-                    `▶ [${category}] Requested ${config.notes.length} explicit note(s) but only ` +
-                    `${remainingBudget} remain under the overall cap (${OVERALL_CARE_NOTE_CAP}) — ` +
-                    `trimming to: ${namesToRequest.join(', ')}`
-                )
-            }
-            const selected = await selectExplicitNotesInSection(category, namesToRequest)
-            allSelected.push(...selected)
-            continue
-        }
-
-        if (config.mode === 'random') {
-            const requestCount = Math.min(config.count, remainingBudget)
-            const selected = await selectRandomNotesInSection(category, requestCount)
-            allSelected.push(...selected)
-            continue
-        }
+    if (CARE_NOTE_COUNT === 'one-per-section') {
+        return selectOneRandomNotePerSection()
     }
-
-    console.log(`▶ Total care notes selected across all sections (${allSelected.length}):`, allSelected)
-    return allSelected
+    return selectFixedCountRandomNotes(CARE_NOTE_COUNT)
 }
 
 // ─────────────────────────────────────────────
-// Adhoc Activity Flow selectors — resident
-// locator is built dynamically from whichever
-// name was randomly picked above.
+// Selectors — one entry per screen element used in
+// the 11-step flow, in the order the steps use them.
 // ─────────────────────────────────────────────
-const adhocSelectors = {
+const selectors = {
+    // Step 2
     adhocButton: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.TextView[@text="Adhoc"]'
         ),
         ios: iOSLocatorBuilder.xpath(
             '//XCUIElementTypeStaticText[@name="Adhoc"]'
-        ),
-    } as TestBotElement,
-
-    // Green up/down arrow beside the search icon on the "Select
-    // Care" screen — tapping it expands all care category
-    // dropdowns at once. Uses the confirmed Unicode private-use
-    // icon character for this button's @text attribute (not an
-    // empty-string match, which was ambiguous on screens with
-    // more than one empty-text button).
-    selectCareViewToggleButton: {
-        android: AndroidLocatorBuilder.xpath(
-            '//android.widget.Button[@text="\uE0A4"]'
-        ),
-        ios: iOSLocatorBuilder.xpath(
-            '//XCUIElementTypeButton[@name=""]'
         ),
     } as TestBotElement,
 
@@ -587,6 +386,19 @@ const adhocSelectors = {
         ),
     } as TestBotElement,
 
+    // Step 3 — green expand-all arrow beside the search bar.
+    // Confirmed Unicode private-use icon character for this
+    // button's @text attribute.
+    expandAllSectionsButton: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.Button[@text="\uE0A4"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeButton[@name=""]'
+        ),
+    } as TestBotElement,
+
+    // Step 5
     selectCareNextButton: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.Button[@text="Next"]'
@@ -596,6 +408,7 @@ const adhocSelectors = {
         ),
     } as TestBotElement,
 
+    // Step 6
     updateCareTitle: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.TextView[@text="Update Care"]'
@@ -614,15 +427,22 @@ const adhocSelectors = {
         ),
     } as TestBotElement,
 
-    bottomTenMinsOption: {
+    // The duration grid at the bottom of the "How long did this
+    // care take?" section — matches any of the standard preset
+    // duration options ("5 mins", "10 mins", "15 mins", "20 mins",
+    // "30 mins", "45 mins", "60 mins") so a genuinely random one
+    // can be picked, per the demonstrated step ("enter random time
+    // frame").
+    durationOptionsContainer: {
         android: AndroidLocatorBuilder.xpath(
-            '//android.view.ViewGroup[@resource-id="com.personcentredsoftware.care.delivery:id/DurationField"]//android.widget.TextView[@text="10 mins"]'
+            '//android.view.ViewGroup[@resource-id="com.personcentredsoftware.care.delivery:id/DurationField"]'
         ),
         ios: iOSLocatorBuilder.xpath(
-            '//XCUIElementTypeStaticText[@name="10 mins"]'
+            '//XCUIElementTypeOther[@name="DurationField"]'
         ),
     } as TestBotElement,
 
+    // Step 7
     confirmButton: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/ConfirmButton"]'
@@ -632,6 +452,11 @@ const adhocSelectors = {
         ),
     } as TestBotElement,
 
+    // Step 8 — NOT PROVIDED. No locator was given for the
+    // "review page" itself; using the presence of the Create
+    // Records button as the review-page confirmation, since
+    // that's the only concrete anchor available. Update this
+    // once a real review-page title/locator is confirmed.
     createRecordsButton: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.Button[@text="Create Records"]'
@@ -641,18 +466,19 @@ const adhocSelectors = {
         ),
     } as TestBotElement,
 
-    // NB: Close button locator unconfirmed — falls back to
-    // Create Records button if a dedicated close control
-    // isn't found. Update once confirmed on real screen.
-    closeAfterCreateButton: {
+    // Step 9 — NOT PROVIDED as a distinct locator from Create
+    // Records in earlier data. Using a text-based "Close" guess;
+    // please confirm the real locator.
+    closeButton: {
         android: AndroidLocatorBuilder.xpath(
-            '//android.widget.Button[@text="Create Records"]'
+            '//android.widget.Button[@text="Close"]'
         ),
         ios: iOSLocatorBuilder.xpath(
-            '//XCUIElementTypeButton[@name="Create Records"]'
+            '//XCUIElementTypeButton[@name="Close"]'
         ),
     } as TestBotElement,
 
+    // Step 10
     earlierTab: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.TextView[@text="Earlier"]'
@@ -662,12 +488,9 @@ const adhocSelectors = {
         ),
     } as TestBotElement,
 
-    // Cross/close mark on the Earlier page that returns to the
-    // Communities page. Confirmed via real page-source dump: it's
-    // the top-right android.widget.Button with empty text — the
-    // FIRST such button in document order (the bottom nav tab
-    // icons are also empty-text Buttons, but appear later in the
-    // tree).
+    // Step 11 — cross/close mark on the Earlier page, returns to
+    // Communities. Confirmed as the first empty-text Button in
+    // document order.
     earlierCloseCrossMark: {
         android: AndroidLocatorBuilder.xpath(
             '(//android.widget.Button[@text=""])[1]'
@@ -688,113 +511,22 @@ const adhocSelectors = {
 }
 
 // ─────────────────────────────────────────────
-// Suite — Dynamic Adhoc Activity Flow
-// (assumes the app is already logged in and on
-// the My Communities page — run this after the
-// enrolment/login suite in the same session)
+// Suite — Adhoc Activity Flow, following the
+// exact 11 documented steps, no additions.
+// Assumes the app is already logged in and on
+// the My Communities page.
 // ─────────────────────────────────────────────
-describe('Care Delivery - Dynamic Adhoc Activity Flow', () => {
+describe('Care Delivery - Adhoc Activity Flow (11-step)', () => {
 
-    let selectedResidentName = ''
     let selectedCareNotes: string[] = []
 
-    // Number of "Update Care" completion iterations to generate as
-    // test steps, computed up front from PER_SECTION_CONFIG so Mocha
-    // can register a fixed number of `it()` blocks. This is the
-    // theoretical MAXIMUM across all sections (explicit lengths +
-    // random counts), capped at OVERALL_CARE_NOTE_CAP — the actual
-    // number selected at runtime may be lower (e.g. a random
-    // section finding fewer visible candidates than requested, or
-    // the overall cap trimming a later section); any planned
-    // iteration beyond what was actually selected skips itself
-    // gracefully (see the loop below).
-    const plannedNoteIterations = Math.min(
-        OVERALL_CARE_NOTE_CAP,
-        ALL_CATEGORY_NAMES.reduce((sum, category) => {
-            const config = PER_SECTION_CONFIG[category] ?? { mode: 'skip' }
-            if (config.mode === 'explicit') return sum + config.notes.length
-            if (config.mode === 'random') return sum + config.count
-            return sum
-        }, 0)
-    )
+    const plannedNoteIterations = CARE_NOTE_COUNT === 'one-per-section'
+        ? ALL_CATEGORY_NAMES.length
+        : Math.min(CARE_NOTE_COUNT, OVERALL_CARE_NOTE_CAP)
 
-    // Scrolls to the bottom "How long did this care take?" section, picks
-    // "10 mins", then taps the bottom "Continue" button — shared by every
-    // care-note completion iteration below.
-    async function completeUpdateCareForCurrentNote(): Promise<void> {
-        const howLongXpath =
-            '//android.widget.TextView[@text="How long did this care take?"]'
-        const bottomTenMinsXpath =
-            '//android.view.ViewGroup[@resource-id="com.personcentredsoftware.care.delivery:id/DurationField"]//android.widget.TextView[@text="10 mins"]'
-
-        let reachedBottom = false
-        for (let i = 0; i < 8; i++) {
-            const heading = await $(howLongXpath)
-            if (await heading.isExisting() && await heading.isDisplayed()) {
-                reachedBottom = true
-                break
-            }
-
-            const { width, height } = await driver.getWindowSize()
-            await driver.execute('mobile: swipeGesture', {
-                left: Math.floor(width * 0.2),
-                top: Math.floor(height * 0.6),
-                width: Math.floor(width * 0.6),
-                height: Math.floor(height * 0.3),
-                direction: 'up',
-                percent: 0.8,
-            })
-            await driver.pause(1500)
-        }
-
-        if (!reachedBottom) {
-            throw new Error('"How long did this care take?" section never became visible after scrolling')
-        }
-
-        let tenMinsEl = await $(bottomTenMinsXpath)
-        for (let i = 0; i < 4; i++) {
-            if (await tenMinsEl.isExisting() && await tenMinsEl.isDisplayed()) break
-
-            const { width, height } = await driver.getWindowSize()
-            await driver.execute('mobile: swipeGesture', {
-                left: Math.floor(width * 0.2),
-                top: Math.floor(height * 0.6),
-                width: Math.floor(width * 0.6),
-                height: Math.floor(height * 0.3),
-                direction: 'up',
-                percent: 0.5,
-            })
-            await driver.pause(1500)
-            tenMinsEl = await $(bottomTenMinsXpath)
-        }
-
-        const confirmXpath =
-            '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/ConfirmButton"]'
-
-        let confirmEnabled = false
-        for (let attempt = 0; attempt < 3 && !confirmEnabled; attempt++) {
-            tenMinsEl = await $(bottomTenMinsXpath)
-            await tenMinsEl.click()
-            console.log(`Selected "10 mins" in the "How long did this care take?" section (attempt ${attempt + 1})`)
-            await driver.pause(2000)
-
-            const confirmBtn = await $(confirmXpath)
-            confirmEnabled = await confirmBtn.waitForEnabled({ timeout: 5000 }).catch(() => false)
-        }
-
-        if (!confirmEnabled) {
-            throw new Error('"Continue" button never became enabled after selecting "10 mins" (tried 3 times)')
-        }
-
-        const confirmBtn = await $(confirmXpath)
-        await confirmBtn.click()
-        console.log('Clicked "Continue"')
-        await driver.pause(3000)
-    }
-
-    it('Step 1 - Select a random resident from the community list', async function () {
+    it('Step 1 - Select any random resident from communities list', async function () {
         try {
-            selectedResidentName = await selectRandomResident()
+            await selectRandomResident()
             await driver.pause(3000)
         } catch (err) {
             await dumpPageSourceOnFailure('Step 1')
@@ -802,68 +534,145 @@ describe('Care Delivery - Dynamic Adhoc Activity Flow', () => {
         }
     })
 
-    it('Step 2 - Click Adhoc', async function () {
+    it('Step 2 - Click on Adhoc', async function () {
         try {
-            await testBot.waitUntilVisible(adhocSelectors.adhocButton, 5000)
-            await testBot.click(adhocSelectors.adhocButton)
+            await testBot.waitUntilVisible(selectors.adhocButton, 5000)
+            await testBot.click(selectors.adhocButton)
             await driver.pause(3000)
+
+            await testBot.waitUntilVisible(selectors.activitiesListItem, 5000)
+            await testBot.click(selectors.activitiesListItem)
+            await driver.pause(3000)
+
+            await testBot.waitUntilVisible(selectors.selectCareScreenTitle, 10000)
         } catch (err) {
             await dumpPageSourceOnFailure('Step 2')
             throw err
         }
     })
 
-    it('Step 3 - Open the "Select Care" picker and choose care note(s) per section config', async function () {
+    it('Step 3 - Click green expand button beside search bar so all care note sections expand', async function () {
         try {
-            await testBot.waitUntilVisible(adhocSelectors.activitiesListItem, 5000)
-            await testBot.click(adhocSelectors.activitiesListItem)
-            await driver.pause(3000)
-
-            await testBot.waitUntilVisible(adhocSelectors.selectCareScreenTitle, 10000)
-
-            // Tap the view-toggle button ONCE, right away, so all
-            // sections/notes render expanded on one screen instead
-            // of the default collapsed/scrollable grid — this
-            // removes the need for per-note scroll-hunting below.
-            try {
-                await testBot.waitUntilVisible(adhocSelectors.selectCareViewToggleButton, 5000)
-                await testBot.click(adhocSelectors.selectCareViewToggleButton)
-                console.log('Tapped view-toggle button — expecting all sections/notes to render expanded')
-                await driver.pause(2000)
-            } catch (toggleErr) {
-                console.warn('View-toggle button not found or tap failed — continuing with default (scrollable) view:', toggleErr)
-            }
-
-            selectedCareNotes = await selectCareNotesForThisRun()
-            await driver.pause(3000)
-
-            await testBot.waitUntilVisible(adhocSelectors.selectCareNextButton, 5000)
-            await testBot.click(adhocSelectors.selectCareNextButton)
-            await driver.pause(3000)
+            await testBot.waitUntilVisible(selectors.expandAllSectionsButton, 5000)
+            await testBot.click(selectors.expandAllSectionsButton)
+            console.log('Clicked green expand-all arrow')
+            await driver.pause(2000)
         } catch (err) {
             await dumpPageSourceOnFailure('Step 3')
             throw err
         }
     })
 
-    // Real UI: selecting care note(s) opens the "Update Care" modal directly
-    // — it already contains Preferences, Happiness slider and the Duration
-    // grid on one screen. When multiple notes were selected, one "Update
-    // Care" screen is completed at a time; each iteration below handles one.
-    for (let noteIndex = 0; noteIndex < plannedNoteIterations; noteIndex++) {
-        const stepLabel = `Step 4.${noteIndex + 1} - Complete "Update Care" for care note #${noteIndex + 1}`
+    it('Step 4 - Select a random care note from each of the expanded sections', async function () {
+        try {
+            selectedCareNotes = await selectCareNotesForThisRun()
+            await driver.pause(2000)
+        } catch (err) {
+            await dumpPageSourceOnFailure('Step 4')
+            throw err
+        }
+    })
+
+    it('Step 5 - Click Next', async function () {
+        try {
+            await testBot.waitUntilVisible(selectors.selectCareNextButton, 5000)
+            await testBot.click(selectors.selectCareNextButton)
+            await driver.pause(3000)
+        } catch (err) {
+            await dumpPageSourceOnFailure('Step 5')
+            throw err
+        }
+    })
+
+    // One "Update Care" completion per selected note, since the
+    // real UI opens one Update Care screen per note.
+    for (let noteIndex = 0; noteIndex < 10; noteIndex++) {
+        const stepLabel = `Step 6.${noteIndex + 1} - Scroll down, enter random duration, complete any additional required fields for note #${noteIndex + 1}`
         it(stepLabel, async function () {
             if (noteIndex >= selectedCareNotes.length) {
-                console.log(`Only ${selectedCareNotes.length} care note(s) were actually selected — skipping iteration ${noteIndex + 1}`)
+                console.log(`Only ${selectedCareNotes.length} care note(s) were selected — skipping iteration ${noteIndex + 1}`)
                 this.skip()
                 return
             }
 
             const noteName = selectedCareNotes[noteIndex]
             try {
-                await testBot.waitUntilVisible(adhocSelectors.updateCareTitle, 10000)
-                console.log(`"Update Care" page loaded for care note "${noteName}" (${noteIndex + 1}/${selectedCareNotes.length})`)
-                await completeUpdateCareForCurrentNote()
+                await testBot.waitUntilVisible(selectors.updateCareTitle, 10000)
+                console.log(`"Update Care" page loaded for "${noteName}" (${noteIndex + 1}/${selectedCareNotes.length})`)
+
+                // Scroll down to the duration section
+                const howLongXpath =
+                    '//android.widget.TextView[@text="How long did this care take?"]'
+
+                let reachedBottom = false
+                for (let i = 0; i < 8; i++) {
+                    const heading = await $(howLongXpath)
+                    if (await heading.isExisting() && await heading.isDisplayed()) {
+                        reachedBottom = true
+                        break
+                    }
+                    const { width, height } = await driver.getWindowSize()
+                    await driver.execute('mobile: swipeGesture', {
+                        left: Math.floor(width * 0.2),
+                        top: Math.floor(height * 0.6),
+                        width: Math.floor(width * 0.6),
+                        height: Math.floor(height * 0.3),
+                        direction: 'up',
+                        percent: 0.8,
+                    })
+                    await driver.pause(1500)
+                }
+                if (!reachedBottom) {
+                    throw new Error('"How long did this care take?" section never became visible after scrolling')
+                }
+
+                // Enter a RANDOM time frame from the standard preset
+                // duration options, per the demonstrated step.
+                const DURATION_OPTIONS = ['5 mins', '10 mins', '15 mins', '20 mins', '30 mins', '45 mins', '60 mins']
+                const randomDuration = DURATION_OPTIONS[Math.floor(Math.random() * DURATION_OPTIONS.length)]
+                const durationXpath = `//android.view.ViewGroup[@resource-id="com.personcentredsoftware.care.delivery:id/DurationField"]//android.widget.TextView[@text="${randomDuration}"]`
+
+                let durationEl = await $(durationXpath)
+                for (let i = 0; i < 4; i++) {
+                    if (await durationEl.isExisting() && await durationEl.isDisplayed()) break
+                    const { width, height } = await driver.getWindowSize()
+                    await driver.execute('mobile: swipeGesture', {
+                        left: Math.floor(width * 0.2),
+                        top: Math.floor(height * 0.6),
+                        width: Math.floor(width * 0.6),
+                        height: Math.floor(height * 0.3),
+                        direction: 'up',
+                        percent: 0.5,
+                    })
+                    await driver.pause(1500)
+                    durationEl = await $(durationXpath)
+                }
+
+                let confirmEnabled = false
+                const confirmXpath =
+                    '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/ConfirmButton"]'
+                for (let attempt = 0; attempt < 3 && !confirmEnabled; attempt++) {
+                    durationEl = await $(durationXpath)
+                    await durationEl.click()
+                    console.log(`Selected "${randomDuration}" for "How long did this care take?" (attempt ${attempt + 1})`)
+                    await driver.pause(2000)
+
+                    const confirmBtn = await $(confirmXpath)
+                    confirmEnabled = await confirmBtn.waitForEnabled({ timeout: 5000 }).catch(() => false)
+                }
+
+                if (!confirmEnabled) {
+                    throw new Error(`"Continue" button never became enabled after selecting "${randomDuration}" (tried 3 times)`)
+                }
+
+                // NB: "enter if any additional answers require
+                // according to care note" — no locators were
+                // provided for any note-specific additional fields
+                // (e.g. a text box, a severity picker). If a given
+                // note type shows extra required fields beyond
+                // duration, this step will need those locators
+                // added here once confirmed; currently only the
+                // duration field is handled.
             } catch (err) {
                 await dumpPageSourceOnFailure(stepLabel)
                 throw err
@@ -871,10 +680,40 @@ describe('Care Delivery - Dynamic Adhoc Activity Flow', () => {
         })
     }
 
-    it('Step 9 - Click Create Records', async function () {
+    it('Step 7 - Click Continue', async function () {
         try {
-            await testBot.waitUntilVisible(adhocSelectors.createRecordsButton, 5000)
-            await testBot.click(adhocSelectors.createRecordsButton)
+            const confirmXpath =
+                '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/ConfirmButton"]'
+            const confirmBtn = await $(confirmXpath)
+            await confirmBtn.waitForEnabled({ timeout: 10000 })
+            await confirmBtn.click()
+            console.log('Clicked Continue')
+            await driver.pause(3000)
+        } catch (err) {
+            await dumpPageSourceOnFailure('Step 7')
+            throw err
+        }
+    })
+
+    it('Step 8 - Verify review page and click Create Records', async function () {
+        try {
+            // NB: no distinct "review page" locator was provided —
+            // using Create Records button visibility as the
+            // confirmation the review page has loaded.
+            await testBot.waitUntilVisible(selectors.createRecordsButton, 10000)
+            console.log('Review page reached (Create Records button visible)')
+            await testBot.click(selectors.createRecordsButton)
+            await driver.pause(3000)
+        } catch (err) {
+            await dumpPageSourceOnFailure('Step 8')
+            throw err
+        }
+    })
+
+    it('Step 9 - Click Close', async function () {
+        try {
+            await testBot.waitUntilVisible(selectors.closeButton, 10000)
+            await testBot.click(selectors.closeButton)
             await driver.pause(3000)
         } catch (err) {
             await dumpPageSourceOnFailure('Step 9')
@@ -882,10 +721,10 @@ describe('Care Delivery - Dynamic Adhoc Activity Flow', () => {
         }
     })
 
-    it('Step 10 - Click Close', async function () {
+    it('Step 10 - Click Earlier', async function () {
         try {
-            await testBot.waitUntilVisible(adhocSelectors.closeAfterCreateButton, 5000)
-            await testBot.click(adhocSelectors.closeAfterCreateButton)
+            await testBot.waitUntilVisible(selectors.earlierTab, 10000)
+            await testBot.click(selectors.earlierTab)
             await driver.pause(3000)
         } catch (err) {
             await dumpPageSourceOnFailure('Step 10')
@@ -893,30 +732,16 @@ describe('Care Delivery - Dynamic Adhoc Activity Flow', () => {
         }
     })
 
-    it('Step 11 - Click on "Earlier" tab', async function () {
+    it('Step 11 - Click cross button; redirects to Communities page', async function () {
         try {
-            await testBot.waitUntilVisible(adhocSelectors.earlierTab, 5000)
-            await testBot.click(adhocSelectors.earlierTab)
+            await testBot.waitUntilVisible(selectors.earlierCloseCrossMark, 10000)
+            await testBot.click(selectors.earlierCloseCrossMark)
             await driver.pause(3000)
+
+            await testBot.waitUntilVisible(selectors.myCommunitiesTab, 30000)
+            console.log('Back on Communities page')
         } catch (err) {
             await dumpPageSourceOnFailure('Step 11')
-            throw err
-        }
-    })
-
-    // Cross mark on the Earlier page — closes it and returns to the
-    // Communities page, from which the signout spec (next in the wdio
-    // specs array) can begin the Finish/Sign Out flow.
-    it('Step 12 - Click the cross mark on the "Earlier" page to return to Communities', async function () {
-        try {
-            await testBot.waitUntilVisible(adhocSelectors.earlierCloseCrossMark, 5000)
-            await testBot.click(adhocSelectors.earlierCloseCrossMark)
-            await driver.pause(3000)
-
-            await testBot.waitUntilVisible(adhocSelectors.myCommunitiesTab, 30000)
-            console.log('Back on Communities page — ready for signout flow')
-        } catch (err) {
-            await dumpPageSourceOnFailure('Step 12')
             throw err
         }
     })
