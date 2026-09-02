@@ -326,12 +326,19 @@ const selectors = {
     // guess as a fallback; please confirm the real Close button
     // locator (likely a different resource-id or an "X"/close
     // icon) via Appium Inspector.
+    // Top-right close (X) button on the Earlier page. Uses the
+    // same proven pattern as earlierCloseCrossMark elsewhere in
+    // this codebase: a plain empty-text Button, matched as the
+    // FIRST such button in document order (top-right icon buttons
+    // on this app typically have no @text/@content-desc set).
+    // Falls back to a text-based "Close" guess only if the
+    // empty-text match isn't found.
     closeButton: {
         android: AndroidLocatorBuilder.xpath(
-            '//android.widget.Button[@text="Close"] | //android.widget.ImageView[@content-desc="Close"]'
+            '(//android.widget.Button[@text=""])[1] | //android.widget.Button[@text="Close"] | //android.widget.ImageView[@content-desc="Close"]'
         ),
         ios: iOSLocatorBuilder.xpath(
-            '//XCUIElementTypeButton[@name="Close"]'
+            '(//XCUIElementTypeButton[@name=""])[1] | //XCUIElementTypeButton[@name="Close"]'
         ),
     } as TestBotElement,
 
