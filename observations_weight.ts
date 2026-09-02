@@ -481,12 +481,38 @@ async function navigateToWeightEntryScreen(): Promise<string> {
             console.warn('Expand-all arrow not found or tap failed — continuing with default (scrollable) view:', toggleErr)
         }
 
-        await testBot.waitUntilVisible(selectors.weightIcon, 5000)
-        await testBot.click(selectors.weightIcon)
-        await driver.pause(1000)
+        // NB: The previous approach tapped a position-based icon
+        // locator (weightIcon, using ViewGroup[4]) before tapping
+        // "Weigh" by text. That position shifts once the expand-all
+        // arrow expands every section (the grid re-lays-out), so
+        // the positional tap was landing on a different section
+        // (Activities) instead of Weight. Fixed by going straight
+        // for the reliable text-based "Weigh" locator, scrolling to
+        // find it if it isn't immediately visible after expanding —
+        // no positional icon tap needed at all.
+        let weighFound = await testBot.isVisible(selectors.weighText).catch(() => false)
+
+        if (!weighFound) {
+            console.log('"Weigh" not immediately visible — scrolling to find it')
+            try {
+                const scrolled = await $(
+                    'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
+                    '.scrollIntoView(new UiSelector().textMatches("^Weigh$"))'
+                )
+                weighFound = await scrolled.isExisting()
+            } catch (scrollErr) {
+                console.warn('Scroll-to-find "Weigh" failed:', scrollErr)
+            }
+        }
+
+        if (!weighFound) {
+            await dumpPageSourceOnFailure('navigateToWeightEntryScreen - Weigh not found')
+            throw new Error('Could not find "Weigh" option on screen, even after scrolling')
+        }
 
         await testBot.waitUntilVisible(selectors.weighText, 5000)
         await testBot.click(selectors.weighText)
+        console.log('Selected "Weigh"')
         await driver.pause(1000)
 
         await testBot.waitUntilVisible(selectors.nextButton, 5000)
