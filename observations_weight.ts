@@ -4,1292 +4,1427 @@ import { iOSLocatorBuilder } from '../../TestBot/Locators/iOS/iOSLocatorBuilder'
 import { TestBotElement } from '../../TestBot/TestBotElement'
 
 const isLocal = process.env.RUN_MODE === 'local'
-
 console.log(
-`Running Weight Observation flow in ${
+    `Running Weight Observation flow in ${
         isLocal ? 'LOCAL PHYSICAL DEVICE' : 'BROWSERSTACK CLOUD'
     } mode`
 )
 
-// ============================================================
-// TEST DATA
-// ============================================================
+// ─────────────────────────────────────────────
+// Full list of care recipients
+// ─────────────────────────────────────────────
 
 const CARE_RECIPIENTS = [
-'Ah-Na Gravy',
-'Alan Gravy',
-'Albie Armstrong',
-'Arturo Reyes',
-'Benita Reyes',
-'Brenda Brown',
-'Charlotte Crawley',
-'Freya Farrow',
-'Gaz Garfield',
-'Harriet Harper',
-'Ingrid Ingleberry',
-'Jo Johnson',
-'Mack Michaels',
-'Maureeen Moor',
-'Rico Dawson',
-'Robyn Partridge',
-'Rosie Matthews',
-'Victor Willson',
-'Yasmine Young',
+    'Ah-Na Gravy',
+    'Alan Gravy',
+    'Albie Armstrong',
+    'Arturo Reyes',
+    'Benita Reyes',
+    'Brenda Brown',
+    'Charlotte Crawley',
+    'Freya Farrow',
+    'Gaz Garfield',
+    'Harriet Harper',
+    'Ingrid Ingleberry',
+    'Jo Johnson',
+    'Mack Michaels',
+    'Maureeen Moor',
+    'Rico Dawson',
+    'Robyn Partridge',
+    'Rosie Matthews',
+    'Victor Willson',
+    'Yasmine Young',
 ]
+
+function residentLocator(name: string): TestBotElement {
+    return {
+        android: AndroidLocatorBuilder.xpath(
+            `//android.widget.TextView[@text="${name}"]`
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            `//XCUIElementTypeStaticText[@name="${name}"]`
+        ),
+    } as TestBotElement
+}
+
+// ─────────────────────────────────────────────
+// Page source dump on failure
+// ─────────────────────────────────────────────
+
+async function dumpPageSourceOnFailure(stepLabel: string) {
+    console.error(`Failure at ${stepLabel} — dumping page source`)
+
+    try {
+        const pageSource = await driver.getPageSource()
+
+        console.log(
+            `─────────── PAGE SOURCE: ${stepLabel} ───────────`
+        )
+        console.log(pageSource)
+        console.log(
+            '─────────────────────────────────────────────'
+        )
+
+        try {
+            const fs = require('fs')
+            const path = require('path')
+
+            const safeName = stepLabel.replace(/[^a-z0-9.]+/gi, '_')
+            const outDir = path.resolve(__dirname, '../../../../run')
+
+            if (!fs.existsSync(outDir)) {
+                fs.mkdirSync(outDir, { recursive: true })
+            }
+
+            fs.writeFileSync(
+                path.join(
+                    outDir,
+                    `weight_obs_failure_${safeName}.xml`
+                ),
+                pageSource,
+                'utf-8'
+            )
+        } catch (writeErr) {
+            console.warn(
+                'Could not write page source to disk:',
+                writeErr
+            )
+        }
+    } catch (srcErr) {
+        console.error(
+            `getPageSource ALSO failed (${
+                srcErr instanceof Error
+                    ? srcErr.message
+                    : srcErr
+            }) — session likely dead.`
+        )
+    }
+}
+
+// ─────────────────────────────────────────────
+// Random resident selection
+// ─────────────────────────────────────────────
+
+async function selectRandomResident(): Promise<string> {
+    console.log(
+        '▶ Scanning screen for all currently visible care recipients...'
+    )
+
+    const visibleCandidates: string[] = []
+
+    for (const candidateName of CARE_RECIPIENTS) {
+        const locator = residentLocator(candidateName)
+
+        const isPresent = await testBot
+            .isVisible(locator)
+            .catch(() => false)
+
+        if (isPresent) {
+            visibleCandidates.push(candidateName)
+        }
+    }
+
+    console.log(
+        `▶ Found ${visibleCandidates.length} visible candidate(s):`,
+        visibleCandidates
+    )
+
+    if (visibleCandidates.length === 0) {
+        console.warn(
+            'No candidates visible without scrolling — using scroll fallback'
+        )
+
+        const shuffled = [...CARE_RECIPIENTS].sort(
+            () => Math.random() - 0.5
+        )
+
+        for (const candidateName of shuffled) {
+            try {
+                const scrolled = await $(
+                    'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
+                        `.scrollIntoView(new UiSelector().textMatches("^${candidateName}$"))`
+                )
+
+                if (await scrolled.isExisting()) {
+                    await scrolled.click()
+
+                    console.log(
+                        `▶ Selected resident: "${candidateName}"`
+                    )
+
+                    return candidateName
+                }
+            } catch (err) {
+                console.warn(
+                    `"${candidateName}" not found — trying next`
+                )
+            }
+        }
+
+        await dumpPageSourceOnFailure(
+            'selectRandomResident - no candidate found'
+        )
+
+        throw new Error(
+            'Could not select any resident from CARE_RECIPIENTS'
+        )
+    }
+
+    const randomIndex = Math.floor(
+        Math.random() * visibleCandidates.length
+    )
+
+    const chosenName = visibleCandidates[randomIndex]
+
+    console.log(
+        `▶ Randomly chosen resident: "${chosenName}"`
+    )
+
+    await testBot.click(residentLocator(chosenName))
+
+    console.log(
+        `▶ Selected resident: "${chosenName}"`
+    )
+
+    return chosenName
+}
+
+// ─────────────────────────────────────────────
+// Weight test data
+// ─────────────────────────────────────────────
 
 const WEIGHT_MIN = 20
 const WEIGHT_MAX = 500
 
-const VALID_VALUES = [
-'20',
-'21',
-'260',
-'499',
-'500',
+const BOUNDARY_VALID_VALUES = [
+    String(WEIGHT_MIN),
+    String(WEIGHT_MIN + 1),
+    '260',
+    String(WEIGHT_MAX - 1),
+    String(WEIGHT_MAX),
 ]
 
-const INVALID_VALUES = [
-'19',
-'501',
-'0',
-'-5',
-'abc',
-'20.5.5',
-'999999',
-'   ',
+const BOUNDARY_INVALID_VALUES = [
+    String(WEIGHT_MIN - 1),
+    String(WEIGHT_MAX + 1),
+    '0',
+    '-5',
+    'abc',
+    '20.5.5',
+    '999999',
+    '   ',
 ]
 
 const BLANK_VALUE = ''
 
-const DURATION_OPTIONS = [
-'5 mins',
-'10 mins',
-'15 mins',
-'20 mins',
-'30 mins',
-'45 mins',
-'60 mins',
-]
+function pickRandomFrom<T>(arr: T[]): T {
+    return arr[Math.floor(Math.random() * arr.length)]
+}
 
-// ============================================================
-// LOCATORS
-// ============================================================
+// ─────────────────────────────────────────────
+// Selectors
+// ─────────────────────────────────────────────
 
 const selectors = {
+    adhocButton: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.TextView[@text="Adhoc"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeStaticText[@name="Adhoc"]'
+        ),
+    } as TestBotElement,
 
-```
-myCommunities: {
-    android: AndroidLocatorBuilder.xpath(
-        '//*[@text="My Communities"]'
-    ),
-    ios: iOSLocatorBuilder.xpath(
-        '//*[@name="My Communities"]'
-    ),
-} as TestBotElement,
+    expandAllSectionsButton: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.Button[@text="\uE0A4"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeButton[@name=""]'
+        ),
+    } as TestBotElement,
 
-resident: (name: string): TestBotElement => ({
-    android: AndroidLocatorBuilder.xpath(
-        `//android.widget.TextView[@text="${name}"]`
-    ),
-    ios: iOSLocatorBuilder.xpath(
-        `//XCUIElementTypeStaticText[@name="${name}"]`
-    ),
-} as TestBotElement),
+    weighText: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.TextView[@text="Weigh"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeStaticText[@name="Weigh"]'
+        ),
+    } as TestBotElement,
 
-adhocButton: {
-    android: AndroidLocatorBuilder.xpath(
-        '//android.widget.TextView[@text="Adhoc"]'
-    ),
-    ios: iOSLocatorBuilder.xpath(
-        '//XCUIElementTypeStaticText[@name="Adhoc"]'
-    ),
-} as TestBotElement,
+    nextButton: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.Button[@text="Next"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeButton[@name="Next"]'
+        ),
+    } as TestBotElement,
 
-expandAll: {
-    android: AndroidLocatorBuilder.xpath(
-        '//android.widget.Button[@text="\uE0A4"]'
-    ),
-    ios: iOSLocatorBuilder.xpath(
-        '//XCUIElementTypeButton[@name=""]'
-    ),
-} as TestBotElement,
+    weightInputField: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.EditText'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeTextField'
+        ),
+    } as TestBotElement,
 
-weigh: {
-    android: AndroidLocatorBuilder.xpath(
-        '//android.widget.TextView[@text="Weigh"]'
-    ),
-    ios: iOSLocatorBuilder.xpath(
-        '//XCUIElementTypeStaticText[@name="Weigh"]'
-    ),
-} as TestBotElement,
+    otherDurationsOption: {
+        android: AndroidLocatorBuilder.xpath(
+            '(//android.widget.TextView[@text="Other Durations"])[1]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '(//XCUIElementTypeStaticText[@name="Other Durations"])[1]'
+        ),
+    } as TestBotElement,
 
-next: {
-    android: AndroidLocatorBuilder.xpath(
-        '//android.widget.Button[@text="Next"]'
-    ),
-    ios: iOSLocatorBuilder.xpath(
-        '//XCUIElementTypeButton[@name="Next"]'
-    ),
-} as TestBotElement,
+    durationEntryField: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/DurationEntry"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeTextField[@name="DurationEntry"]'
+        ),
+    } as TestBotElement,
 
-weightInput: {
-    android: AndroidLocatorBuilder.xpath(
-        '//android.widget.EditText'
-    ),
-    ios: iOSLocatorBuilder.xpath(
-        '//XCUIElementTypeTextField'
-    ),
-} as TestBotElement,
+    confirmButton: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/ConfirmButton"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeButton[@name="ConfirmButton"]'
+        ),
+    } as TestBotElement,
 
-otherDurations: {
-    android: AndroidLocatorBuilder.xpath(
-        '(//android.widget.TextView[@text="Other Durations"])[1]'
-    ),
-    ios: iOSLocatorBuilder.xpath(
-        '(//XCUIElementTypeStaticText[@name="Other Durations"])[1]'
-    ),
-} as TestBotElement,
+    createRecordsButton: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.Button[@text="Create Records"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeButton[@name="Create Records"]'
+        ),
+    } as TestBotElement,
 
-durationEntry: {
-    android: AndroidLocatorBuilder.xpath(
-        '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/DurationEntry"]'
-    ),
-    ios: iOSLocatorBuilder.xpath(
-        '//XCUIElementTypeTextField[@name="DurationEntry"]'
-    ),
-} as TestBotElement,
+    // ─────────────────────────────────────────
+    // Close button on Earlier screen
+    // ─────────────────────────────────────────
 
-confirm: {
-    android: AndroidLocatorBuilder.xpath(
-        '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/ConfirmButton"]'
-    ),
-    ios: iOSLocatorBuilder.xpath(
-        '//XCUIElementTypeButton[@name="ConfirmButton"]'
-    ),
-} as TestBotElement,
+    closeButton: {
+        android: AndroidLocatorBuilder.xpath(
+            '(//android.widget.Button[@text=""])[1] | ' +
+                '//android.widget.Button[@text="Close"] | ' +
+                '//android.widget.ImageView[@content-desc="Close"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '(//XCUIElementTypeButton[@name=""])[1] | ' +
+                '//XCUIElementTypeButton[@name="Close"]'
+        ),
+    } as TestBotElement,
 
-createRecords: {
-    android: AndroidLocatorBuilder.xpath(
-        '//android.widget.Button[@text="Create Records"]'
-    ),
-    ios: iOSLocatorBuilder.xpath(
-        '//XCUIElementTypeButton[@name="Create Records"]'
-    ),
-} as TestBotElement,
+    // ─────────────────────────────────────────
+    // Earlier tab
+    // ─────────────────────────────────────────
 
-earlier: {
-    android: AndroidLocatorBuilder.xpath(
-        '//android.view.ViewGroup[@resource-id="com.personcentredsoftware.care.delivery:id/ProfilePage"]' +
-        '/android.view.ViewGroup/android.view.ViewGroup[2]/android.view.ViewGroup' +
-        '/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup[1]' +
-        '/android.view.ViewGroup/android.widget.Button'
-    ),
-    ios: iOSLocatorBuilder.xpath(
-        '//XCUIElementTypeButton[@name="Earlier"]'
-    ),
-} as TestBotElement,
+    earlierTab: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.view.ViewGroup[@resource-id="com.personcentredsoftware.care.delivery:id/ProfilePage"]/android.view.ViewGroup/android.view.ViewGroup[2]/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup/android.view.ViewGroup[1]/android.view.ViewGroup/android.widget.Button'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeButton[@name="Earlier"]'
+        ),
+    } as TestBotElement,
 
-close: {
-    android: AndroidLocatorBuilder.xpath(
-        '(//android.widget.Button[@text=""])[1]'
-    ),
-    ios: iOSLocatorBuilder.xpath(
-        '(//XCUIElementTypeButton[@name=""])[1]'
-    ),
-} as TestBotElement,
+    // ─────────────────────────────────────────
+    // Destination screen
+    // ─────────────────────────────────────────
 
-validationError: {
-    android: AndroidLocatorBuilder.xpath(
-        '//android.widget.TextView[' +
-        'contains(@text,"required") or ' +
-        'contains(@text,"invalid") or ' +
-        'contains(@text,"Invalid") or ' +
-        'contains(@text,"must be") or ' +
-        'contains(@text,"between") or ' +
-        'contains(@text,"20") or ' +
-        'contains(@text,"500")' +
-        ']'
-    ),
-    ios: iOSLocatorBuilder.xpath(
-        '//XCUIElementTypeStaticText[' +
-        'contains(@name,"required") or ' +
-        'contains(@name,"invalid") or ' +
-        'contains(@name,"Invalid") or ' +
-        'contains(@name,"must be") or ' +
-        'contains(@name,"between") or ' +
-        'contains(@name,"20") or ' +
-        'contains(@name,"500")' +
-        ']'
-    ),
-} as TestBotElement,
-```
+    myCommunitiesTab: {
+        android: AndroidLocatorBuilder.xpath(
+            '//*[@text="My Communities"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//*[@name="My Communities"]'
+        ),
+    } as TestBotElement,
 
+    baselineMessage: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.TextView[contains(@text,"baseline") or contains(@text,"Baseline")]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeStaticText[contains(@name,"baseline") or contains(@name,"Baseline")]'
+        ),
+    } as TestBotElement,
+
+    validationErrorMessage: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.TextView[contains(@text,"required") or contains(@text,"invalid") or contains(@text,"Invalid") or contains(@text,"must be")]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeStaticText[contains(@name,"required") or contains(@name,"invalid") or contains(@name,"Invalid") or contains(@name,"must be")]'
+        ),
+    } as TestBotElement,
 }
 
-// ============================================================
-// COMMON HELPERS
-// ============================================================
+// ─────────────────────────────────────────────
+// Validation message helper
+// ─────────────────────────────────────────────
 
-async function isVisible(
-locator: TestBotElement
-): Promise<boolean> {
-return testBot.isVisible(locator).catch(() => false)
+async function checkForMessage(
+    label: string
+): Promise<{
+    baselineShown: boolean
+    validationShown: boolean
+}> {
+    const baselineShown = await testBot
+        .isVisible(selectors.baselineMessage)
+        .catch(() => false)
+
+    const validationShown = await testBot
+        .isVisible(selectors.validationErrorMessage)
+        .catch(() => false)
+
+    console.log(
+        `[${label}] baseline: ${baselineShown}, validation: ${validationShown}`
+    )
+
+    return {
+        baselineShown,
+        validationShown,
+    }
 }
 
-async function dumpPageSource(label: string): Promise<void> {
-console.error(`Page source requested: ${label}`)
+// ─────────────────────────────────────────────
+// Enter weight
+// ─────────────────────────────────────────────
 
-```
-try {
-    const source = await driver.getPageSource()
+async function enterWeightValue(
+    value: string
+): Promise<void> {
+    await testBot.waitUntilVisible(
+        selectors.weightInputField,
+        10000
+    )
 
-    console.log(`========== PAGE SOURCE: ${label} ==========`)
-    console.log(source)
-    console.log(`============================================`)
+    await testBot.click(selectors.weightInputField)
+
+    await driver.pause(300)
 
     try {
-        const fs = require('fs')
-        const path = require('path')
-
-        const directory = path.resolve(
-            __dirname,
-            '../../../../run'
-        )
-
-        if (!fs.existsSync(directory)) {
-            fs.mkdirSync(directory, {
-                recursive: true,
-            })
-        }
-
-        const safeLabel = label.replace(
-            /[^a-z0-9]+/gi,
-            '_'
-        )
-
-        fs.writeFileSync(
-            path.join(
-                directory,
-                `weight_failure_${safeLabel}.xml`
-            ),
-            source,
-            'utf8'
-        )
-    } catch (writeError) {
+        await (
+            await $(
+                await (testBot as any).getLocatorTextForElement(
+                    selectors.weightInputField
+                )
+            )
+        ).clearValue()
+    } catch (clearErr) {
         console.warn(
-            'Could not save page source:',
-            writeError
+            'clearValue failed:',
+            clearErr
         )
     }
-} catch (error) {
-    console.error(
-        'Could not retrieve page source. Session may be dead:',
-        error
-    )
-}
-```
 
-}
-
-async function hideKeyboard(): Promise<void> {
-try {
-await driver.hideKeyboard()
-} catch {
-// Keyboard may already be hidden.
-}
-
-```
-await driver.pause(500)
-```
-
-}
-
-// ============================================================
-// ENSURE WE ARE ON MY COMMUNITIES
-// ============================================================
-
-async function ensureMyCommunities(): Promise<void> {
-
-```
-console.log('Checking current application screen...')
-
-if (await isVisible(selectors.myCommunities)) {
-    console.log('Already on My Communities')
-    return
-}
-
-console.log(
-    'My Communities is not visible. Attempting to return to it.'
-)
-
-/*
- * First check whether the Earlier page is currently open.
- * If it is, close it and wait for My Communities.
- */
-
-if (await isVisible(selectors.earlier)) {
-
-    console.log(
-        'Earlier page detected. Closing Earlier page.'
-    )
-
-    await testBot.click(selectors.close)
-
-    await driver.pause(2000)
-
-    if (
-        await testBot.waitUntilVisible(
-            selectors.myCommunities,
-            10000
-        ).catch(() => false)
-    ) {
-        console.log(
-            'Successfully returned to My Communities'
+    if (value !== '') {
+        await testBot.enterText(
+            selectors.weightInputField,
+            value,
+            false
         )
-        return
+    }
+
+    await driver.pause(500)
+
+    try {
+        await driver.hideKeyboard()
+        await driver.pause(500)
+    } catch (kbErr) {
+        console.warn(
+            'Keyboard already hidden:',
+            kbErr
+        )
     }
 }
 
-/*
- * If the resident profile is open, try the Earlier route.
- */
+// ─────────────────────────────────────────────
+// Select duration
+// ─────────────────────────────────────────────
 
-if (await isVisible(selectors.adhocButton)) {
+async function selectDurationOption(): Promise<boolean> {
+    const DURATION_OPTIONS = [
+        '5 mins',
+        '10 mins',
+        '15 mins',
+        '20 mins',
+        '30 mins',
+        '45 mins',
+        '60 mins',
+    ]
 
-    console.log(
-        'Resident profile detected.'
-    )
-
-    if (await isVisible(selectors.earlier)) {
-
-        await testBot.click(selectors.earlier)
-
-        await driver.pause(1500)
-
-        if (await isVisible(selectors.close)) {
-            await testBot.click(selectors.close)
-            await driver.pause(2000)
-        }
-
-        if (await isVisible(selectors.myCommunities)) {
-            return
-        }
-    }
-}
-
-/*
- * Final verification.
- */
-
-if (!(await isVisible(selectors.myCommunities))) {
-    await dumpPageSource(
-        'ensureMyCommunities_failed'
-    )
-
-    throw new Error(
-        'Could not return to My Communities page.'
-    )
-}
-```
-
-}
-
-// ============================================================
-// RESIDENT SELECTION
-// ============================================================
-
-async function selectResident(): Promise<string> {
-
-```
-await testBot.waitUntilVisible(
-    selectors.myCommunities,
-    15000
-)
-
-console.log(
-    'Scanning My Communities for available residents...'
-)
-
-const visibleResidents: string[] = []
-
-for (const name of CARE_RECIPIENTS) {
-
-    const visible = await isVisible(
-        selectors.resident(name)
-    )
-
-    if (visible) {
-        visibleResidents.push(name)
-    }
-}
-
-if (visibleResidents.length > 0) {
-
-    const selected =
-        visibleResidents[
+    const randomDuration =
+        DURATION_OPTIONS[
             Math.floor(
                 Math.random() *
-                visibleResidents.length
+                    DURATION_OPTIONS.length
             )
         ]
 
+    const durationXpath =
+        `//android.view.ViewGroup[@resource-id="com.personcentredsoftware.care.delivery:id/DurationField"]` +
+        `//android.widget.TextView[@text="${randomDuration}"]`
+
     console.log(
-        `Selected visible resident: ${selected}`
+        `Selecting duration: "${randomDuration}"`
     )
 
-    await testBot.click(
-        selectors.resident(selected)
+    let durationEl = await $(
+        durationXpath
     )
 
-    await driver.pause(2000)
-
-    return selected
-}
-
-/*
- * If none are visible, use Android scrollIntoView.
- */
-
-const shuffled = [...CARE_RECIPIENTS].sort(
-    () => Math.random() - 0.5
-)
-
-for (const name of shuffled) {
-
-    try {
-
-        const element = await $(
-            'android=new UiScrollable(' +
-            'new UiSelector().scrollable(true).instance(0))' +
-            `.scrollIntoView(` +
-            `new UiSelector().textMatches("^${name}$"))`
-        )
-
-        if (await element.isExisting()) {
-
-            console.log(
-                `Selected resident after scrolling: ${name}`
-            )
-
-            await element.click()
-
-            await driver.pause(2000)
-
-            return name
+    for (let i = 0; i < 4; i++) {
+        if (
+            (await durationEl.isExisting()) &&
+            (await durationEl.isDisplayed())
+        ) {
+            break
         }
 
-    } catch {
         console.log(
-            `Resident "${name}" not found. Trying next.`
+            `Duration not visible — scrolling (${i + 1})`
+        )
+
+        const {
+            width,
+            height,
+        } = await driver.getWindowSize()
+
+        await driver.execute(
+            'mobile: swipeGesture',
+            {
+                left: Math.floor(
+                    width * 0.2
+                ),
+                top: Math.floor(
+                    height * 0.6
+                ),
+                width: Math.floor(
+                    width * 0.6
+                ),
+                height: Math.floor(
+                    height * 0.3
+                ),
+                direction: 'up',
+                percent: 0.5,
+            }
+        )
+
+        await driver.pause(1200)
+
+        durationEl = await $(
+            durationXpath
         )
     }
-}
 
-await dumpPageSource(
-    'selectResident_no_resident_found'
-)
-
-throw new Error(
-    'No care recipient could be selected.'
-)
-```
-
-}
-
-// ============================================================
-// NAVIGATE TO WEIGHT SCREEN
-// ============================================================
-
-async function navigateToWeightScreen(): Promise<string> {
-
-```
-/*
- * IMPORTANT:
- *
- * This function ALWAYS starts from My Communities.
- *
- * This prevents the next test from accidentally starting
- * on Care Notes, Earlier, Resident Profile, or another
- * intermediate screen.
- */
-
-await ensureMyCommunities()
-
-const residentName =
-    await selectResident()
-
-console.log(
-    `Opening Adhoc for "${residentName}"`
-)
-
-await testBot.waitUntilVisible(
-    selectors.adhocButton,
-    10000
-)
-
-await testBot.click(
-    selectors.adhocButton
-)
-
-await driver.pause(2000)
-
-/*
- * Expand all is optional.
- *
- * We do NOT use the old positional weightIcon locator.
- * The Weigh text locator is used instead.
- */
-
-if (await isVisible(selectors.expandAll)) {
-
-    try {
-
-        await testBot.click(
-            selectors.expandAll
+    if (
+        !(await durationEl.isExisting())
+    ) {
+        console.warn(
+            `Could not find "${randomDuration}" — using Other Durations`
         )
 
+        await handleOtherDurationsIfPresent(
+            '10'
+        )
+
+        return await testBot
+            .isVisible(
+                selectors.confirmButton
+            )
+            .catch(() => false)
+    }
+
+    let confirmEnabled = false
+
+    for (
+        let attempt = 0;
+        attempt < 3 &&
+        !confirmEnabled;
+        attempt++
+    ) {
+        durationEl = await $(
+            durationXpath
+        )
+
+        await durationEl.click()
+
         console.log(
-            'Expanded activity sections.'
+            `Tapped "${randomDuration}" — attempt ${
+                attempt + 1
+            }`
         )
 
         await driver.pause(1500)
 
-    } catch {
-        console.log(
-            'Could not expand sections. Continuing.'
-        )
-    }
-}
-
-/*
- * Find Weigh.
- */
-
-let weighVisible =
-    await isVisible(selectors.weigh)
-
-if (!weighVisible) {
-
-    console.log(
-        'Weigh not visible. Scrolling.'
-    )
-
-    try {
-
-        const weighElement = await $(
-            'android=new UiScrollable(' +
-            'new UiSelector().scrollable(true).instance(0))' +
-            '.scrollIntoView(' +
-            'new UiSelector().textMatches("^Weigh$"))'
-        )
-
-        weighVisible =
-            await weighElement.isExisting()
-
-    } catch (error) {
-
-        console.warn(
-            'Could not scroll to Weigh:',
-            error
-        )
-    }
-}
-
-if (!weighVisible) {
-
-    await dumpPageSource(
-        'navigateToWeightScreen_weigh_not_found'
-    )
-
-    throw new Error(
-        'Weigh option could not be found.'
-    )
-}
-
-await testBot.click(
-    selectors.weigh
-)
-
-await driver.pause(1000)
-
-/*
- * Next.
- */
-
-await testBot.waitUntilVisible(
-    selectors.next,
-    10000
-)
-
-await testBot.click(
-    selectors.next
-)
-
-await driver.pause(1500)
-
-/*
- * Weight input.
- */
-
-await testBot.waitUntilVisible(
-    selectors.weightInput,
-    10000
-)
-
-console.log(
-    'Weight entry screen is ready.'
-)
-
-return residentName
-```
-
-}
-
-// ============================================================
-// WEIGHT ENTRY
-// ============================================================
-
-async function enterWeight(
-value: string
-): Promise<void> {
-
-```
-await testBot.waitUntilVisible(
-    selectors.weightInput,
-    10000
-)
-
-await testBot.click(
-    selectors.weightInput
-)
-
-await driver.pause(300)
-
-try {
-
-    const locatorText =
-        await (testBot as any)
-            .getLocatorTextForElement(
-                selectors.weightInput
+        const confirmBtn =
+            await $(
+                '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/ConfirmButton"]'
             )
 
-    const element = await $(
-        locatorText
-    )
-
-    await element.clearValue()
-
-} catch {
-    console.warn(
-        'Could not clear input using clearValue.'
-    )
-}
-
-if (value !== '') {
-
-    await testBot.enterText(
-        selectors.weightInput,
-        value,
-        false
-    )
-}
-
-await driver.pause(500)
-
-await hideKeyboard()
-```
-
-}
-
-// ============================================================
-// VALIDATION CHECK
-// ============================================================
-
-async function hasValidationError(): Promise<boolean> {
-
-```
-return isVisible(
-    selectors.validationError
-)
-```
-
-}
-
-// ============================================================
-// DURATION SELECTION
-// ============================================================
-
-async function selectDuration(): Promise<boolean> {
-
-```
-const duration =
-    DURATION_OPTIONS[
-        Math.floor(
-            Math.random() *
-            DURATION_OPTIONS.length
-        )
-    ]
-
-console.log(
-    `Selecting duration: ${duration}`
-)
-
-const durationXpath =
-    `//android.view.ViewGroup[` +
-    `@resource-id="com.personcentredsoftware.care.delivery:id/DurationField"` +
-    `]//android.widget.TextView[` +
-    `@text="${duration}"` +
-    `]`
-
-let durationElement =
-    await $(durationXpath)
-
-/*
- * Try to find the duration.
- */
-
-for (
-    let attempt = 0;
-    attempt < 4;
-    attempt++
-) {
-
-    if (
-        await durationElement.isExisting() &&
-        await durationElement.isDisplayed()
-    ) {
-        break
+        confirmEnabled =
+            await confirmBtn
+                .waitForEnabled({
+                    timeout: 5000,
+                })
+                .catch(
+                    () => false
+                )
     }
 
-    console.log(
-        `Duration "${duration}" not visible. Scrolling.`
-    )
-
-    const size =
-        await driver.getWindowSize()
-
-    await driver.execute(
-        'mobile: swipeGesture',
-        {
-            left: Math.floor(
-                size.width * 0.2
-            ),
-            top: Math.floor(
-                size.height * 0.6
-            ),
-            width: Math.floor(
-                size.width * 0.6
-            ),
-            height: Math.floor(
-                size.height * 0.3
-            ),
-            direction: 'up',
-            percent: 0.5,
-        }
-    )
-
-    await driver.pause(800)
-
-    durationElement =
-        await $(durationXpath)
+    return confirmEnabled
 }
 
-if (
-    !(
-        await durationElement.isExisting()
+// ─────────────────────────────────────────────
+// Other Durations
+// ─────────────────────────────────────────────
+
+async function handleOtherDurationsIfPresent(
+    minutesValue: string
+): Promise<void> {
+    const isPresent =
+        await testBot
+            .isVisible(
+                selectors.otherDurationsOption
+            )
+            .catch(() => false)
+
+    if (!isPresent) {
+        return
+    }
+
+    await testBot.click(
+        selectors.otherDurationsOption
     )
-) {
-
-    console.warn(
-        `Duration "${duration}" was not found.`
-    )
-
-    return false
-}
-
-/*
- * Tap duration and verify Confirm becomes enabled.
- */
-
-for (
-    let attempt = 1;
-    attempt <= 3;
-    attempt++
-) {
-
-    await durationElement.click()
 
     await driver.pause(1000)
 
-    const confirmButton =
-        await $(
-            '//android.widget.Button[' +
-            '@resource-id="com.personcentredsoftware.care.delivery:id/ConfirmButton"' +
-            ']'
+    await testBot.waitUntilVisible(
+        selectors.durationEntryField,
+        5000
+    )
+
+    await testBot.click(
+        selectors.durationEntryField
+    )
+
+    await testBot.enterText(
+        selectors.durationEntryField,
+        minutesValue,
+        false
+    )
+
+    await driver.pause(500)
+
+    try {
+        await driver.hideKeyboard()
+        await driver.pause(500)
+    } catch (err) {
+        console.warn(
+            'Keyboard already hidden'
+        )
+    }
+
+    await testBot.waitUntilVisible(
+        selectors.confirmButton,
+        5000
+    )
+
+    await testBot.click(
+        selectors.confirmButton
+    )
+
+    await driver.pause(1500)
+}
+
+// ─────────────────────────────────────────────
+// Return to Weight Entry Screen
+// ─────────────────────────────────────────────
+
+async function returnToWeightEntryScreenForResident(
+    residentName: string
+): Promise<void> {
+    try {
+        const locator =
+            residentLocator(
+                residentName
+            )
+
+        let residentFound =
+            await testBot
+                .isVisible(locator)
+                .catch(() => false)
+
+        if (!residentFound) {
+            console.log(
+                `"${residentName}" not immediately visible — scrolling`
+            )
+
+            try {
+                const scrolled =
+                    await $(
+                        'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
+                            `.scrollIntoView(new UiSelector().textMatches("^${residentName}$"))`
+                    )
+
+                residentFound =
+                    await scrolled.isExisting()
+            } catch (scrollErr) {
+                console.warn(
+                    'Scroll failed:',
+                    scrollErr
+                )
+            }
+        }
+
+        if (!residentFound) {
+            throw new Error(
+                `Could not find resident "${residentName}"`
+            )
+        }
+
+        await testBot.click(locator)
+
+        await driver.pause(2000)
+
+        await testBot.waitUntilVisible(
+            selectors.adhocButton,
+            5000
         )
 
-    const enabled =
-        await confirmButton
-            .waitForEnabled({
-                timeout: 5000,
-            })
-            .catch(() => false)
+        await testBot.click(
+            selectors.adhocButton
+        )
 
-    if (enabled) {
+        await driver.pause(2000)
+
+        try {
+            await testBot.waitUntilVisible(
+                selectors.expandAllSectionsButton,
+                5000
+            )
+
+            await testBot.click(
+                selectors.expandAllSectionsButton
+            )
+
+            await driver.pause(2000)
+        } catch (err) {
+            console.warn(
+                'Expand-all not available'
+            )
+        }
+
+        let weighFound =
+            await testBot
+                .isVisible(
+                    selectors.weighText
+                )
+                .catch(() => false)
+
+        if (!weighFound) {
+            try {
+                const scrolled =
+                    await $(
+                        'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
+                            '.scrollIntoView(new UiSelector().textMatches("^Weigh$"))'
+                    )
+
+                weighFound =
+                    await scrolled.isExisting()
+            } catch (err) {
+                console.warn(
+                    'Unable to scroll to Weigh'
+                )
+            }
+        }
+
+        if (!weighFound) {
+            throw new Error(
+                'Could not find Weigh option'
+            )
+        }
+
+        await testBot.click(
+            selectors.weighText
+        )
+
+        await driver.pause(1000)
+
+        await testBot.waitUntilVisible(
+            selectors.nextButton,
+            5000
+        )
+
+        await testBot.click(
+            selectors.nextButton
+        )
+
+        await driver.pause(2000)
+
+        await testBot.waitUntilVisible(
+            selectors.weightInputField,
+            10000
+        )
 
         console.log(
-            `Duration "${duration}" selected successfully.`
+            'Reached weight input screen'
+        )
+    } catch (err) {
+        await dumpPageSourceOnFailure(
+            'returnToWeightEntryScreenForResident'
         )
 
-        return true
+        throw err
+    }
+}
+
+// ─────────────────────────────────────────────
+// Initial navigation
+// ─────────────────────────────────────────────
+
+async function navigateToWeightEntryScreen(): Promise<string> {
+    let selectedResident = ''
+
+    try {
+        selectedResident =
+            await selectRandomResident()
+
+        await driver.pause(2000)
+
+        await testBot.waitUntilVisible(
+            selectors.adhocButton,
+            5000
+        )
+
+        await testBot.click(
+            selectors.adhocButton
+        )
+
+        await driver.pause(2000)
+
+        try {
+            await testBot.waitUntilVisible(
+                selectors.expandAllSectionsButton,
+                5000
+            )
+
+            await testBot.click(
+                selectors.expandAllSectionsButton
+            )
+
+            await driver.pause(2000)
+        } catch (err) {
+            console.warn(
+                'Expand-all unavailable'
+            )
+        }
+
+        let weighFound =
+            await testBot
+                .isVisible(
+                    selectors.weighText
+                )
+                .catch(() => false)
+
+        if (!weighFound) {
+            try {
+                const scrolled =
+                    await $(
+                        'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
+                            '.scrollIntoView(new UiSelector().textMatches("^Weigh$"))'
+                    )
+
+                weighFound =
+                    await scrolled.isExisting()
+            } catch (err) {
+                console.warn(
+                    'Scroll to Weigh failed'
+                )
+            }
+        }
+
+        if (!weighFound) {
+            throw new Error(
+                'Could not find Weigh option'
+            )
+        }
+
+        await testBot.click(
+            selectors.weighText
+        )
+
+        await driver.pause(1000)
+
+        await testBot.waitUntilVisible(
+            selectors.nextButton,
+            5000
+        )
+
+        await testBot.click(
+            selectors.nextButton
+        )
+
+        await driver.pause(2000)
+
+        await testBot.waitUntilVisible(
+            selectors.weightInputField,
+            10000
+        )
+
+        console.log(
+            'Reached weight input screen'
+        )
+    } catch (err) {
+        await dumpPageSourceOnFailure(
+            'navigateToWeightEntryScreen'
+        )
+
+        throw err
+    }
+
+    return selectedResident
+}
+
+// ─────────────────────────────────────────────
+// FINAL NAVIGATION
+// ─────────────────────────────────────────────
+//
+// Flow:
+// Create Records
+//      ↓
+// Earlier
+//      ↓
+// Close
+//      ↓
+// Earlier screen should disappear
+//      ↓
+// My Communities should appear
+// ─────────────────────────────────────────────
+
+async function closeEarlierAndVerifyRedirect(): Promise<void> {
+    console.log(
+        '▶ Starting final Close and Redirect flow'
+    )
+
+    // 1. Open Earlier
+    await testBot.waitUntilVisible(
+        selectors.earlierTab,
+        10000
+    )
+
+    await testBot.click(
+        selectors.earlierTab
+    )
+
+    await driver.pause(2000)
+
+    console.log(
+        '▶ Earlier screen opened'
+    )
+
+    // 2. Make sure Close button exists
+    await testBot.waitUntilVisible(
+        selectors.closeButton,
+        5000
+    )
+
+    console.log(
+        '▶ Close button is visible'
+    )
+
+    // 3. Click Close
+    await testBot.click(
+        selectors.closeButton
+    )
+
+    console.log(
+        '▶ Close button clicked'
+    )
+
+    await driver.pause(2000)
+
+    // 4. IMPORTANT:
+    // Confirm that the Earlier/Close screen is no longer visible.
+    const closeButtonStillVisible =
+        await testBot
+            .isVisible(
+                selectors.closeButton
+            )
+            .catch(() => false)
+
+    if (closeButtonStillVisible) {
+        throw new Error(
+            'Close button is still visible after clicking Close. Navigation did not complete.'
+        )
     }
 
     console.log(
-        `Duration selection attempt ${attempt} did not enable Confirm.`
+        '✓ Earlier screen successfully closed'
+    )
+
+    // 5. Verify redirect to My Communities
+    await testBot.waitUntilVisible(
+        selectors.myCommunitiesTab,
+        30000
+    )
+
+    console.log(
+        '✓ Successfully redirected to My Communities'
+    )
+
+    // 6. Final verification
+    const communitiesVisible =
+        await testBot
+            .isVisible(
+                selectors.myCommunitiesTab
+            )
+            .catch(() => false)
+
+    if (!communitiesVisible) {
+        throw new Error(
+            'My Communities screen is not visible after Close'
+        )
+    }
+
+    console.log(
+        '✓ Final destination verified: My Communities'
     )
 }
 
-return false
-```
-
-}
-
-// ============================================================
-// COMPLETE RECORD
-// ============================================================
-
-async function completeWeightRecord(): Promise<void> {
-
-```
-const durationSelected =
-    await selectDuration()
-
-if (!durationSelected) {
-
-    throw new Error(
-        'Confirm button did not become enabled after selecting a duration.'
-    )
-}
-
-await testBot.click(
-    selectors.confirm
-)
-
-await driver.pause(1500)
-
-await testBot.waitUntilVisible(
-    selectors.createRecords,
-    10000
-)
-
-await testBot.click(
-    selectors.createRecords
-)
-
-await driver.pause(2000)
-
-/*
- * Earlier page.
- */
-
-await testBot.waitUntilVisible(
-    selectors.earlier,
-    10000
-)
-
-await testBot.click(
-    selectors.earlier
-)
-
-await driver.pause(1500)
-
-/*
- * Close Earlier.
- */
-
-await testBot.waitUntilVisible(
-    selectors.close,
-    10000
-)
-
-console.log(
-    'Closing Earlier page.'
-)
-
-await testBot.click(
-    selectors.close
-)
-
-await driver.pause(2000)
-
-/*
- * VERY IMPORTANT:
- *
- * The test does not continue until My Communities
- * is actually visible.
- */
-
-await testBot.waitUntilVisible(
-    selectors.myCommunities,
-    30000
-)
-
-console.log(
-    'Successfully returned to My Communities.'
-)
-```
-
-}
-
-// ============================================================
-// RESET FOR NEXT TEST
-// ============================================================
-
-async function prepareNextTest(): Promise<void> {
-
-```
-await driver.pause(1000)
-
-/*
- * Never allow the next test to inherit the previous
- * test's screen.
- */
-
-await ensureMyCommunities()
-
-await testBot.waitUntilVisible(
-    selectors.myCommunities,
-    15000
-)
-
-console.log(
-    'Application is ready for the next test.'
-)
-```
-
-}
-
-// ============================================================
+// ═══════════════════════════════════════════════
 // SMOKE TEST
-// ============================================================
+// ═══════════════════════════════════════════════
 
 describe(
-'Resident Area Profile - Observations - Weight - SMOKE',
-() => {
-
-```
-    it(
-        'Smoke - Blank weight shows validation',
-        async function () {
-
-            try {
-
-                await navigateToWeightScreen()
-
-                await enterWeight(
-                    BLANK_VALUE
-                )
-
-                const validation =
-                    await hasValidationError()
-
-                expect(validation).toBe(true)
-
-            } catch (error) {
-
-                await dumpPageSource(
-                    'Smoke_blank_weight'
-                )
-
-                throw error
+    'Resident Area Profile - Observations - Weight - SMOKE TEST',
+    () => {
+        it(
+            'Smoke Step 1 - Navigate to Weight entry screen',
+            async function () {
+                await navigateToWeightEntryScreen()
             }
-        }
-    )
+        )
 
-    it(
-        'Smoke - Invalid weight shows validation',
-        async function () {
+        it(
+            'Smoke Step 2 - Leaving value blank shows expected validation',
+            async function () {
+                try {
+                    await enterWeightValue(
+                        BLANK_VALUE
+                    )
 
-            try {
-
-                await prepareNextTest()
-
-                await navigateToWeightScreen()
-
-                const invalid =
-                    INVALID_VALUES[
-                        Math.floor(
-                            Math.random() *
-                            INVALID_VALUES.length
+                    const {
+                        validationShown,
+                    } =
+                        await checkForMessage(
+                            'Smoke: blank value'
                         )
-                    ]
 
-                console.log(
-                    `Testing invalid weight: ${invalid}`
-                )
+                    console.log(
+                        `Blank validation shown: ${validationShown}`
+                    )
+                } catch (err) {
+                    await dumpPageSourceOnFailure(
+                        'Smoke Step 2'
+                    )
 
-                await enterWeight(
-                    invalid
-                )
-
-                const validation =
-                    await hasValidationError()
-
-                expect(validation).toBe(true)
-
-            } catch (error) {
-
-                await dumpPageSource(
-                    'Smoke_invalid_weight'
-                )
-
-                throw error
+                    throw err
+                }
             }
-        }
-    )
+        )
 
-    it(
-        'Smoke - Valid weight can continue',
-        async function () {
+        it(
+            'Smoke Step 3 - Invalid value shows expected validation',
+            async function () {
+                try {
+                    const invalidValue =
+                        pickRandomFrom(
+                            BOUNDARY_INVALID_VALUES
+                        )
 
-            try {
+                    console.log(
+                        `Testing invalid value: "${invalidValue}"`
+                    )
 
-                await prepareNextTest()
+                    await enterWeightValue(
+                        invalidValue
+                    )
 
-                await navigateToWeightScreen()
+                    const {
+                        validationShown,
+                    } =
+                        await checkForMessage(
+                            `Smoke: invalid ${invalidValue}`
+                        )
 
-                await enterWeight(
-                    '260'
-                )
+                    console.log(
+                        `Invalid validation shown: ${validationShown}`
+                    )
+                } catch (err) {
+                    await dumpPageSourceOnFailure(
+                        'Smoke Step 3'
+                    )
 
-                const validation =
-                    await hasValidationError()
-
-                expect(validation).toBe(false)
-
-            } catch (error) {
-
-                await dumpPageSource(
-                    'Smoke_valid_weight'
-                )
-
-                throw error
+                    throw err
+                }
             }
-        }
-    )
+        )
 
-    it(
-        'Smoke - Complete weight observation',
-        async function () {
+        it(
+            'Smoke Step 4 - Valid value is accepted',
+            async function () {
+                try {
+                    await enterWeightValue(
+                        '260'
+                    )
 
-            try {
+                    const {
+                        validationShown,
+                    } =
+                        await checkForMessage(
+                            'Smoke: valid value'
+                        )
 
-                await prepareNextTest()
+                    if (
+                        validationShown
+                    ) {
+                        throw new Error(
+                            'Validation message unexpectedly displayed for valid value'
+                        )
+                    }
+                } catch (err) {
+                    await dumpPageSourceOnFailure(
+                        'Smoke Step 4'
+                    )
 
-                await navigateToWeightScreen()
-
-                await enterWeight(
-                    '260'
-                )
-
-                const validation =
-                    await hasValidationError()
-
-                expect(validation).toBe(false)
-
-                await completeWeightRecord()
-
-            } catch (error) {
-
-                await dumpPageSource(
-                    'Smoke_complete_record'
-                )
-
-                throw error
+                    throw err
+                }
             }
-        }
-    )
-}
-```
+        )
 
+        it(
+            'Smoke Step 5 - Complete record and redirect after Close',
+            async function () {
+                try {
+                    const confirmEnabled =
+                        await selectDurationOption()
+
+                    if (
+                        !confirmEnabled
+                    ) {
+                        throw new Error(
+                            'Continue button did not become enabled'
+                        )
+                    }
+
+                    await testBot.waitUntilVisible(
+                        selectors.confirmButton,
+                        5000
+                    )
+
+                    await testBot.click(
+                        selectors.confirmButton
+                    )
+
+                    console.log(
+                        '✓ Clicked Continue'
+                    )
+
+                    await driver.pause(
+                        2000
+                    )
+
+                    // Create Records
+                    await testBot.waitUntilVisible(
+                        selectors.createRecordsButton,
+                        10000
+                    )
+
+                    await testBot.click(
+                        selectors.createRecordsButton
+                    )
+
+                    console.log(
+                        '✓ Clicked Create Records'
+                    )
+
+                    await driver.pause(
+                        2000
+                    )
+
+                    // Final navigation
+                    await closeEarlierAndVerifyRedirect()
+
+                    console.log(
+                        '✓ Smoke test completed successfully'
+                    )
+                } catch (err) {
+                    await dumpPageSourceOnFailure(
+                        'Smoke Step 5'
+                    )
+
+                    throw err
+                }
+            }
+        )
+    }
 )
 
-// ============================================================
-// THOROUGH BOUNDARY TEST
-// ============================================================
+// ═══════════════════════════════════════════════
+// THOROUGH TEST
+// ═══════════════════════════════════════════════
 
 describe(
-'Resident Area Profile - Observations - Weight - THOROUGH',
-() => {
+    'Resident Area Profile - Observations - Weight - THOROUGH',
+    () => {
+        let residentName = ''
 
-```
-    /*
-     * One resident is selected for the entire thorough run.
-     *
-     * The resident name is stored only so that logging can
-     * identify the selected resident. Each individual test
-     * still starts from My Communities.
-     */
+        it(
+            'Thorough Step 1 - Select resident and test blank value',
+            async function () {
+                try {
+                    residentName =
+                        await navigateToWeightEntryScreen()
 
-    let residentName = ''
-
-    it(
-        'Thorough - Select resident and test blank value',
-        async function () {
-
-            try {
-
-                residentName =
-                    await navigateToWeightScreen()
-
-                console.log(
-                    `Thorough tests using resident: ${residentName}`
-                )
-
-                await enterWeight(
-                    BLANK_VALUE
-                )
-
-                const validation =
-                    await hasValidationError()
-
-                expect(validation).toBe(true)
-
-            } catch (error) {
-
-                await dumpPageSource(
-                    'Thorough_blank_weight'
-                )
-
-                throw error
-            }
-        }
-    )
-
-    INVALID_VALUES.forEach(
-        (invalidValue, index) => {
-
-            it(
-                `Thorough ${index + 1} - Invalid value "${invalidValue}"`,
-                async function () {
-
-                    try {
-
-                        await prepareNextTest()
-
-                        await navigateToWeightScreen()
-
-                        console.log(
-                            `Testing invalid value: "${invalidValue}"`
-                        )
-
-                        await enterWeight(
-                            invalidValue
-                        )
-
-                        const validation =
-                            await hasValidationError()
-
-                        expect(validation).toBe(true)
-
-                    } catch (error) {
-
-                        await dumpPageSource(
-                            `Thorough_invalid_${index + 1}`
-                        )
-
-                        throw error
-                    }
-                }
-            )
-        }
-    )
-
-    VALID_VALUES.forEach(
-        (validValue, index) => {
-
-            it(
-                `Thorough ${index + 1} - Valid value "${validValue}"`,
-                async function () {
-
-                    try {
-
-                        await prepareNextTest()
-
-                        await navigateToWeightScreen()
-
-                        console.log(
-                            `Testing valid value: "${validValue}"`
-                        )
-
-                        await enterWeight(
-                            validValue
-                        )
-
-                        const validation =
-                            await hasValidationError()
-
-                        expect(validation).toBe(false)
-
-                    } catch (error) {
-
-                        await dumpPageSource(
-                            `Thorough_valid_${index + 1}`
-                        )
-
-                        throw error
-                    }
-                }
-            )
-        }
-    )
-
-    it(
-        'Thorough - Complete valid weight observation',
-        async function () {
-
-            try {
-
-                await prepareNextTest()
-
-                await navigateToWeightScreen()
-
-                console.log(
-                    `Completing observation for resident: ${residentName}`
-                )
-
-                await enterWeight(
-                    '260'
-                )
-
-                const validation =
-                    await hasValidationError()
-
-                expect(validation).toBe(false)
-
-                await completeWeightRecord()
-
-                /*
-                 * Final assertion.
-                 */
-
-                expect(
-                    await isVisible(
-                        selectors.myCommunities
+                    console.log(
+                        `▶ Thorough suite resident: "${residentName}"`
                     )
-                ).toBe(true)
 
-            } catch (error) {
+                    await enterWeightValue(
+                        BLANK_VALUE
+                    )
 
-                await dumpPageSource(
-                    'Thorough_complete_record'
-                )
+                    const {
+                        validationShown,
+                    } =
+                        await checkForMessage(
+                            'Thorough: blank value'
+                        )
 
-                throw error
+                    expect(
+                        validationShown
+                    ).toBe(true)
+                } catch (err) {
+                    await dumpPageSourceOnFailure(
+                        'Thorough Step 1'
+                    )
+
+                    throw err
+                }
             }
-        }
-    )
-}
-```
+        )
 
+        BOUNDARY_INVALID_VALUES.forEach(
+            (
+                invalidValue,
+                index
+            ) => {
+                it(
+                    `Thorough Step 2.${
+                        index + 1
+                    } - Invalid value "${invalidValue}"`,
+                    async function () {
+                        try {
+                            await returnToWeightEntryScreenForResident(
+                                residentName
+                            )
+
+                            await enterWeightValue(
+                                invalidValue
+                            )
+
+                            const {
+                                validationShown,
+                            } =
+                                await checkForMessage(
+                                    `Invalid ${invalidValue}`
+                                )
+
+                            expect(
+                                validationShown
+                            ).toBe(true)
+                        } catch (err) {
+                            await dumpPageSourceOnFailure(
+                                `Thorough invalid ${invalidValue}`
+                            )
+
+                            throw err
+                        }
+                    }
+                )
+            }
+        )
+
+        BOUNDARY_VALID_VALUES.forEach(
+            (
+                validValue,
+                index
+            ) => {
+                it(
+                    `Thorough Step 3.${
+                        index + 1
+                    } - Valid value "${validValue}"`,
+                    async function () {
+                        try {
+                            await returnToWeightEntryScreenForResident(
+                                residentName
+                            )
+
+                            await enterWeightValue(
+                                validValue
+                            )
+
+                            const {
+                                validationShown,
+                            } =
+                                await checkForMessage(
+                                    `Valid ${validValue}`
+                                )
+
+                            expect(
+                                validationShown
+                            ).toBe(false)
+                        } catch (err) {
+                            await dumpPageSourceOnFailure(
+                                `Thorough valid ${validValue}`
+                            )
+
+                            throw err
+                        }
+                    }
+                )
+            }
+        )
+
+        it(
+            'Thorough Step 4 - Baseline message for valid entry',
+            async function () {
+                try {
+                    await returnToWeightEntryScreenForResident(
+                        residentName
+                    )
+
+                    await enterWeightValue(
+                        '260'
+                    )
+
+                    await selectDurationOption()
+
+                    const {
+                        baselineShown,
+                    } =
+                        await checkForMessage(
+                            'Baseline message'
+                        )
+
+                    console.log(
+                        `Baseline message shown: ${baselineShown}`
+                    )
+                } catch (err) {
+                    await dumpPageSourceOnFailure(
+                        'Thorough Step 4'
+                    )
+
+                    throw err
+                }
+            }
+        )
+
+        it(
+            'Thorough Step 5 - Complete record and redirect after Close',
+            async function () {
+                try {
+                    // Return to Weight screen
+                    await returnToWeightEntryScreenForResident(
+                        residentName
+                    )
+
+                    // Enter valid weight
+                    await enterWeightValue(
+                        '260'
+                    )
+
+                    await driver.pause(
+                        1000
+                    )
+
+                    // Select duration
+                    const confirmEnabled =
+                        await selectDurationOption()
+
+                    if (
+                        !confirmEnabled
+                    ) {
+                        throw new Error(
+                            'Continue button did not become enabled'
+                        )
+                    }
+
+                    // Continue
+                    await testBot.waitUntilVisible(
+                        selectors.confirmButton,
+                        5000
+                    )
+
+                    await testBot.click(
+                        selectors.confirmButton
+                    )
+
+                    console.log(
+                        '✓ Clicked Continue'
+                    )
+
+                    await driver.pause(
+                        2000
+                    )
+
+                    // Create Records
+                    await testBot.waitUntilVisible(
+                        selectors.createRecordsButton,
+                        10000
+                    )
+
+                    await testBot.click(
+                        selectors.createRecordsButton
+                    )
+
+                    console.log(
+                        '✓ Clicked Create Records'
+                    )
+
+                    await driver.pause(
+                        2000
+                    )
+
+                    // ─────────────────────────
+                    // Close Earlier screen
+                    // and verify redirect
+                    // ─────────────────────────
+
+                    await closeEarlierAndVerifyRedirect()
+
+                    console.log(
+                        '✓ Thorough test completed successfully'
+                    )
+                } catch (err) {
+                    await dumpPageSourceOnFailure(
+                        'Thorough Step 5'
+                    )
+
+                    throw err
+                }
+            }
+        )
+    }
 )
