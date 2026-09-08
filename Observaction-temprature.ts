@@ -6,7 +6,9 @@ import { TestBotElement } from '../../TestBot/TestBotElement'
 const isLocal = process.env.RUN_MODE === 'local'
 
 console.log(
-Running Temperature Observation flow in ${ isLocal ? 'LOCAL PHYSICAL DEVICE' : 'BROWSERSTACK CLOUD' } mode
+`Running Temperature Observation flow in ${
+        isLocal ? 'LOCAL PHYSICAL DEVICE' : 'BROWSERSTACK CLOUD'
+    } mode`
 )
 
 // ═══════════════════════════════════════════════
@@ -37,16 +39,6 @@ const CARE_RECIPIENTS = [
 
 // ═══════════════════════════════════════════════
 // TEMPERATURE BOUNDARY VALUE ANALYSIS
-//
-// Accepted range: 30 - 50
-//
-// 29 = INVALID
-// 30 = VALID
-// 31 = VALID
-// 40 = VALID
-// 49 = VALID
-// 50 = VALID
-// 51 = INVALID
 // ═══════════════════════════════════════════════
 
 const TEMPERATURE_MIN = 30
@@ -106,6 +98,7 @@ function residentLocator(
 name: string
 ): TestBotElement {
 
+```
 return {
     android: AndroidLocatorBuilder.xpath(
         `//android.widget.TextView[@text="${name}"]`
@@ -115,6 +108,7 @@ return {
         `//XCUIElementTypeStaticText[@name="${name}"]`
     ),
 } as TestBotElement
+```
 
 }
 
@@ -126,6 +120,7 @@ async function dumpPageSourceOnFailure(
 stepLabel: string
 ): Promise<void> {
 
+```
 console.error(
     `Failure at ${stepLabel} — dumping page source`
 )
@@ -196,6 +191,7 @@ try {
         srcErr
     )
 }
+```
 
 }
 
@@ -205,6 +201,7 @@ try {
 
 const selectors = {
 
+```
 adhocButton: {
     android:
         AndroidLocatorBuilder.xpath(
@@ -241,8 +238,7 @@ temperatureText: {
         ),
 } as TestBotElement,
 
-// EXACT TEMPERATURE SELECTION CONTROL
-// CLICKED ONLY ONCE
+// PLATFORM-SAFE TEMPERATURE SELECTION CONTROL
 
 temperatureSelectionButton: {
     android:
@@ -267,8 +263,6 @@ temperatureInputField: {
             '//XCUIElementTypeTextField'
         ),
 } as TestBotElement,
-
-// NEXT BUTTON
 
 nextButton: {
     android:
@@ -378,6 +372,7 @@ myCommunitiesTab: {
             '//*[@name="My Communities"]'
         ),
 } as TestBotElement,
+```
 
 }
 
@@ -387,6 +382,7 @@ myCommunitiesTab: {
 
 async function selectResident(): Promise<string> {
 
+```
 console.log(
     '▶ Searching for visible care recipients...'
 )
@@ -472,6 +468,7 @@ await dumpPageSourceOnFailure(
 throw new Error(
     'No care recipient could be selected'
 )
+```
 
 }
 
@@ -484,6 +481,7 @@ field: TestBotElement,
 value: string
 ): Promise<void> {
 
+```
 console.log(
     `▶ Entering temperature value: ${value}`
 )
@@ -541,6 +539,7 @@ try {
 console.log(
     `✓ Temperature value entered: ${value}`
 )
+```
 
 }
 
@@ -553,6 +552,7 @@ field: any,
 value: string
 ): Promise<void> {
 
+```
 await field.waitForDisplayed({
     timeout: 10000,
 })
@@ -589,6 +589,7 @@ try {
         'Keyboard already hidden'
     )
 }
+```
 
 }
 
@@ -599,11 +600,13 @@ try {
 async function isValidationVisible():
 Promise<boolean> {
 
+```
 return await testBot
     .isVisible(
         selectors.validationErrorMessage
     )
     .catch(() => false)
+```
 
 }
 
@@ -617,6 +620,7 @@ testCase: TemperatureBoundaryCase,
 validationVisible: boolean
 ): Promise<void> {
 
+```
 if (testCase.expectedValid) {
 
     if (validationVisible) {
@@ -647,6 +651,7 @@ if (!validationVisible) {
 console.log(
     `✓ PASS: ${fieldName} → ${testCase.value} correctly rejected`
 )
+```
 
 }
 
@@ -657,6 +662,7 @@ console.log(
 async function runTemperatureBoundaryValueAnalysis():
 Promise<void> {
 
+```
 console.log(
     '════════════════════════════════════'
 )
@@ -755,6 +761,7 @@ console.log(
 console.log(
     '════════════════════════════════════'
 )
+```
 
 }
 
@@ -764,6 +771,7 @@ console.log(
 
 async function getFieldsAfterNext(): Promise<any[]> {
 
+```
 const fields =
     await $$(
         '//android.widget.EditText'
@@ -783,6 +791,7 @@ if (
 }
 
 return fields
+```
 
 }
 
@@ -795,6 +804,7 @@ field: any,
 fieldName: string
 ): Promise<void> {
 
+```
 console.log(
     `▶ Resetting ${fieldName} to valid value ${FINAL_VALID_TEMPERATURE}`
 )
@@ -820,6 +830,7 @@ if (validationVisible) {
 console.log(
     `✓ ${fieldName} reset successfully`
 )
+```
 
 }
 
@@ -832,6 +843,7 @@ field: any,
 fieldName: string
 ): Promise<void> {
 
+```
 console.log(
     '────────────────────────────────────'
 )
@@ -893,6 +905,7 @@ await resetRawFieldToValidValue(
 console.log(
     `✓ ${fieldName} BVA PASSED`
 )
+```
 
 }
 
@@ -903,6 +916,7 @@ console.log(
 async function runAdditionalFieldsBVA():
 Promise<void> {
 
+```
 console.log(
     '════════════════════════════════════'
 )
@@ -977,6 +991,7 @@ console.log(
 console.log(
     '════════════════════════════════════'
 )
+```
 
 }
 
@@ -987,6 +1002,7 @@ console.log(
 async function navigateToTemperature():
 Promise<string> {
 
+```
 try {
 
     const residentName =
@@ -1070,15 +1086,8 @@ try {
         )
     }
 
-    // ═════════════════════════════════════
-    // SELECT TEMPERATURE
-    //
-    // EXACT USER-PROVIDED XPATH
-    // CLICKED ONLY ONCE
-    // ═════════════════════════════════════
-
     console.log(
-        '▶ Selecting Temperature using ImageView'
+        '▶ Selecting Temperature using platform-specific selection control'
     )
 
     await testBot.waitUntilVisible(
@@ -1086,12 +1095,52 @@ try {
         10000
     )
 
-    await testBot.click(
-        selectors.temperatureSelectionButton
-    )
+    const temperatureSelectionLocator =
+        await (
+            testBot as any
+        ).getLocatorTextForElement(
+            selectors.temperatureSelectionButton
+        )
+
+    const temperatureSelectionElement =
+        await $(
+            temperatureSelectionLocator
+        )
+
+    await temperatureSelectionElement.waitForExist({
+        timeout: 10000,
+    })
+
+    await temperatureSelectionElement.waitForDisplayed({
+        timeout: 10000,
+    })
+
+    if (
+        typeof temperatureSelectionElement.waitForEnabled === 'function'
+    ) {
+
+        await temperatureSelectionElement.waitForEnabled({
+            timeout: 10000,
+        })
+    }
+
+    try {
+
+        await temperatureSelectionElement.scrollIntoView()
+
+        await driver.pause(300)
+
+    } catch (scrollErr) {
+
+        console.warn(
+            'Could not scroll Temperature selection control into view'
+        )
+    }
+
+    await temperatureSelectionElement.click()
 
     console.log(
-        '✓ Temperature selected'
+        '✓ Temperature selection control clicked once'
     )
 
     await driver.pause(1200)
@@ -1115,6 +1164,7 @@ try {
 
     throw err
 }
+```
 
 }
 
@@ -1125,6 +1175,7 @@ try {
 async function clickNext():
 Promise<void> {
 
+```
 console.log(
     '▶ Preparing to continue from Temperature'
 )
@@ -1138,8 +1189,6 @@ console.log(
     `✓ Temperature value ${FINAL_VALID_TEMPERATURE} is ready`
 )
 
-// Make sure keyboard is not covering the Next button.
-
 try {
 
     await driver.hideKeyboard()
@@ -1152,8 +1201,6 @@ try {
         'Keyboard already hidden'
     )
 }
-
-// Resolve the exact TestBot locator to a native WebdriverIO element.
 
 const nextLocator =
     await (
@@ -1177,12 +1224,6 @@ await nextElement.waitForEnabled({
     timeout: 10000,
 })
 
-console.log(
-    '✓ Next button is visible and enabled'
-)
-
-// Scroll the Next button into view before clicking.
-
 try {
 
     await nextElement.scrollIntoView()
@@ -1197,9 +1238,6 @@ try {
     )
 }
 
-// Native WebdriverIO click avoids the TestBot click issue
-// while keeping the existing Next XPath unchanged.
-
 await nextElement.click()
 
 console.log(
@@ -1207,6 +1245,7 @@ console.log(
 )
 
 await driver.pause(2000)
+```
 
 }
 
@@ -1217,6 +1256,7 @@ await driver.pause(2000)
 async function enterFinalTemperature():
 Promise<void> {
 
+```
 console.log(
     `▶ Confirming final valid temperature: ${FINAL_VALID_TEMPERATURE}`
 )
@@ -1262,10 +1302,6 @@ if (
     currentValue !== FINAL_VALID_TEMPERATURE
 ) {
 
-    console.log(
-        `▶ Setting Temperature to ${FINAL_VALID_TEMPERATURE}`
-    )
-
     await enterValue(
         selectors.temperatureInputField,
         FINAL_VALID_TEMPERATURE
@@ -1284,8 +1320,6 @@ if (validationVisible) {
     )
 }
 
-// Ensure keyboard is hidden before Next step.
-
 try {
 
     await driver.hideKeyboard()
@@ -1302,6 +1336,7 @@ try {
 console.log(
     `✓ Final Temperature ${FINAL_VALID_TEMPERATURE} accepted`
 )
+```
 
 }
 
@@ -1312,6 +1347,7 @@ console.log(
 async function completeCloseNavigation():
 Promise<void> {
 
+```
 console.log(
     '════════ FINAL CLOSE FLOW ════════'
 )
@@ -1387,6 +1423,7 @@ console.log(
 console.log(
     '════════ CLOSE FLOW COMPLETE ════════'
 )
+```
 
 }
 
@@ -1398,6 +1435,7 @@ describe(
 'Resident Area Profile - Observations - Temperature - Boundary Value Analysis',
 () => {
 
+```
     let residentName = ''
 
     it(
@@ -1506,5 +1544,3 @@ describe(
         }
     )
 }
-
-)
