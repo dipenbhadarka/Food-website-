@@ -38,7 +38,7 @@ const CARE_RECIPIENTS = [
 ]
 
 // ═══════════════════════════════════════════════
-// TEMPERATURE BOUNDARY VALUE ANALYSIS
+// BOUNDARY VALUE ANALYSIS
 //
 // Accepted range: 30 - 50
 //
@@ -125,13 +125,11 @@ function residentLocator(
 async function dumpPageSourceOnFailure(
     stepLabel: string
 ): Promise<void> {
-
     console.error(
         `Failure at ${stepLabel} — dumping page source`
     )
 
     try {
-
         const pageSource =
             await driver.getPageSource()
 
@@ -146,7 +144,6 @@ async function dumpPageSourceOnFailure(
         )
 
         try {
-
             const fs = require('fs')
             const path = require('path')
 
@@ -179,17 +176,13 @@ async function dumpPageSourceOnFailure(
                 pageSource,
                 'utf-8'
             )
-
         } catch (writeErr) {
-
             console.warn(
                 'Could not save page source:',
                 writeErr
             )
         }
-
     } catch (srcErr) {
-
         console.error(
             'Could not get page source:',
             srcErr
@@ -473,7 +466,10 @@ async function selectResident(): Promise<string> {
         '▶ No resident immediately visible — scrolling'
     )
 
-    for (const candidateName of CARE_RECIPIENTS) {
+    for (
+        const candidateName
+        of CARE_RECIPIENTS
+    ) {
 
         try {
 
@@ -516,7 +512,7 @@ async function selectResident(): Promise<string> {
 }
 
 // ═══════════════════════════════════════════════
-// ENTER VALUE INTO FIELD
+// ENTER VALUE INTO TESTBOT FIELD
 // ═══════════════════════════════════════════════
 
 async function enterValue(
@@ -577,6 +573,56 @@ async function enterValue(
 }
 
 // ═══════════════════════════════════════════════
+// ENTER VALUE INTO RAW WEBDRIVER ELEMENT
+//
+// Used for the two fields displayed after Next.
+// ═══════════════════════════════════════════════
+
+async function enterRawFieldValue(
+    field: any,
+    value: string
+): Promise<void> {
+
+    await field.waitForDisplayed({
+        timeout: 10000,
+    })
+
+    await field.click()
+
+    await driver.pause(300)
+
+    try {
+
+        await field.clearValue()
+
+    } catch (clearErr) {
+
+        console.warn(
+            'Could not clear raw field:',
+            clearErr
+        )
+
+    }
+
+    await field.setValue(value)
+
+    await driver.pause(600)
+
+    try {
+
+        await driver.hideKeyboard()
+
+        await driver.pause(500)
+
+    } catch (err) {
+
+        console.log(
+            'Keyboard already hidden'
+        )
+    }
+}
+
+// ═══════════════════════════════════════════════
 // CHECK VALIDATION
 // ═══════════════════════════════════════════════
 
@@ -588,6 +634,48 @@ Promise<boolean> {
             selectors.validationErrorMessage
         )
         .catch(() => false)
+}
+
+// ═══════════════════════════════════════════════
+// ASSERT BVA RESULT
+// ═══════════════════════════════════════════════
+
+async function assertBoundaryResult(
+    fieldName: string,
+    testCase: TemperatureBoundaryCase,
+    validationVisible: boolean
+): Promise<void> {
+
+    if (testCase.expectedValid) {
+
+        if (validationVisible) {
+
+            throw new Error(
+                `BVA FAILED: ${fieldName} value "${testCase.value}" ` +
+                `(${testCase.description}) should be VALID ` +
+                `but validation was displayed`
+            )
+        }
+
+        console.log(
+            `✓ PASS: ${fieldName} → ${testCase.value} accepted`
+        )
+
+        return
+    }
+
+    if (!validationVisible) {
+
+        throw new Error(
+            `BVA FAILED: ${fieldName} value "${testCase.value}" ` +
+            `(${testCase.description}) should be INVALID ` +
+            `but validation was NOT displayed`
+        )
+    }
+
+    console.log(
+        `✓ PASS: ${fieldName} → ${testCase.value} correctly rejected`
+    )
 }
 
 // ═══════════════════════════════════════════════
@@ -618,7 +706,7 @@ Promise<void> {
 }
 
 // ═══════════════════════════════════════════════
-// BOUNDARY VALUE ANALYSIS
+// TEMPERATURE BVA
 // ═══════════════════════════════════════════════
 
 async function runTemperatureBoundaryValueAnalysis():
@@ -646,11 +734,11 @@ Promise<void> {
     ) {
 
         console.log(
-            `▶ Testing ${testCase.description}`
+            `▶ Testing Temperature: ${testCase.value}`
         )
 
         console.log(
-            `▶ Temperature value: ${testCase.value}`
+            `▶ ${testCase.description}`
         )
 
         await enterValue(
@@ -663,52 +751,11 @@ Promise<void> {
         const validationVisible =
             await isValidationVisible()
 
-        // ─────────────────────────────────────
-        // EXPECTED VALID
-        // ─────────────────────────────────────
-
-        if (
-            testCase.expectedValid
-        ) {
-
-            if (
-                validationVisible
-            ) {
-
-                throw new Error(
-                    `BVA FAILED: "${testCase.value}" ` +
-                    `(${testCase.description}) ` +
-                    `should be VALID but validation was displayed`
-                )
-            }
-
-            console.log(
-                `✓ PASS: ${testCase.value} is accepted`
-            )
-
-        }
-
-        // ─────────────────────────────────────
-        // EXPECTED INVALID
-        // ─────────────────────────────────────
-
-        else {
-
-            if (
-                !validationVisible
-            ) {
-
-                throw new Error(
-                    `BVA FAILED: "${testCase.value}" ` +
-                    `(${testCase.description}) ` +
-                    `should be INVALID but validation was not displayed`
-                )
-            }
-
-            console.log(
-                `✓ PASS: ${testCase.value} correctly rejected`
-            )
-        }
+        await assertBoundaryResult(
+            'Temperature',
+            testCase,
+            validationVisible
+        )
 
         await driver.pause(500)
     }
@@ -727,13 +774,13 @@ Promise<void> {
 }
 
 // ═══════════════════════════════════════════════
-// GET EDITTEXT FIELDS AFTER NEXT
+// GET FIELDS AFTER NEXT
 //
-// The exact locators for these two fields were
-// not provided, so they are identified by order.
+// Existing implementation uses the first two
+// android.widget.EditText elements.
 //
-// This can be replaced with exact XPath once
-// page source is available.
+// Keep this because these are the same locators
+// currently used in your working script.
 // ═══════════════════════════════════════════════
 
 async function getFieldsAfterNext(): Promise<any[]> {
@@ -752,7 +799,7 @@ async function getFieldsAfterNext(): Promise<any[]> {
     ) {
 
         throw new Error(
-            `Expected two fields after Next but found ${fields.length}`
+            `Expected at least two fields after Next but found ${fields.length}`
         )
     }
 
@@ -760,7 +807,139 @@ async function getFieldsAfterNext(): Promise<any[]> {
 }
 
 // ═══════════════════════════════════════════════
-// BVA FOR ADDITIONAL FIELDS
+// RESET FIELD TO VALID VALUE
+//
+// This is important for BVA.
+//
+// If the previous test entered 29 or 51,
+// validation may still be visible.
+//
+// We first enter 40 to reset the field,
+// then execute the actual boundary case.
+// ═══════════════════════════════════════════════
+
+async function resetRawFieldToValidValue(
+    field: any,
+    fieldName: string
+): Promise<void> {
+
+    console.log(
+        `▶ Resetting ${fieldName} to valid value ${FINAL_VALID_TEMPERATURE}`
+    )
+
+    await enterRawFieldValue(
+        field,
+        FINAL_VALID_TEMPERATURE
+    )
+
+    await driver.pause(500)
+
+    const validationVisible =
+        await isValidationVisible()
+
+    if (validationVisible) {
+
+        throw new Error(
+            `Unable to reset ${fieldName}. ` +
+            `Valid value ${FINAL_VALID_TEMPERATURE} still shows validation.`
+        )
+    }
+
+    console.log(
+        `✓ ${fieldName} reset successfully`
+    )
+}
+
+// ═══════════════════════════════════════════════
+// RUN BVA AGAINST RAW FIELD
+//
+// This is the important correction.
+//
+// Previously:
+//     enter value
+//     log value
+//
+// Now:
+//     enter value
+//     check validation
+//     compare actual result with expected result
+//     fail test when behaviour is incorrect
+// ═══════════════════════════════════════════════
+
+async function runRawFieldBVA(
+    field: any,
+    fieldName: string
+): Promise<void> {
+
+    console.log(
+        '────────────────────────────────────'
+    )
+
+    console.log(
+        `▶ STARTING BVA FOR ${fieldName}`
+    )
+
+    console.log(
+        `▶ Expected range: ${TEMPERATURE_MIN} - ${TEMPERATURE_MAX}`
+    )
+
+    console.log(
+        '────────────────────────────────────'
+    )
+
+    for (
+        const testCase
+        of TEMPERATURE_BOUNDARY_CASES
+    ) {
+
+        console.log(
+            `▶ ${fieldName} → Testing ${testCase.value}`
+        )
+
+        console.log(
+            `▶ ${testCase.description}`
+        )
+
+        // Always reset before every boundary case.
+        // This prevents the previous invalid value
+        // from affecting the next assertion.
+        await resetRawFieldToValidValue(
+            field,
+            fieldName
+        )
+
+        await enterRawFieldValue(
+            field,
+            testCase.value
+        )
+
+        await driver.pause(700)
+
+        const validationVisible =
+            await isValidationVisible()
+
+        await assertBoundaryResult(
+            fieldName,
+            testCase,
+            validationVisible
+        )
+
+        await driver.pause(500)
+    }
+
+    // Leave the field with a valid value.
+    await resetRawFieldToValidValue(
+        field,
+        fieldName
+    )
+
+    console.log(
+        `✓ ${fieldName} BVA PASSED`
+    )
+}
+
+// ═══════════════════════════════════════════════
+// BVA FOR BOTH FIELDS AFTER NEXT
 // ═══════════════════════════════════════════════
 
 async function runAdditionalFieldsBVA():
@@ -774,14 +953,20 @@ Promise<void> {
         '▶ STARTING BVA FOR ADDITIONAL FIELDS'
     )
 
+    console.log(
+        `▶ Expected range: ${TEMPERATURE_MIN} - ${TEMPERATURE_MAX}`
+    )
+
+    console.log(
+        '════════════════════════════════════'
+    )
+
     const fields =
         await getFieldsAfterNext()
 
-    // First field after Next
     const firstField =
         fields[0]
 
-    // Second field after Next
     const secondField =
         fields[1]
 
@@ -789,80 +974,58 @@ Promise<void> {
     // FIELD 1
     // ─────────────────────────────────────────
 
-    console.log(
-        '▶ Running BVA on first field after Next'
+    await runRawFieldBVA(
+        firstField,
+        'Field 1 after Next'
     )
-
-    for (
-        const testCase
-        of TEMPERATURE_BOUNDARY_CASES
-    ) {
-
-        console.log(
-            `▶ Field 1 → ${testCase.value}`
-        )
-
-        await firstField.click()
-
-        try {
-            await firstField.clearValue()
-        } catch (err) {
-            console.warn(
-                'Could not clear first field'
-            )
-        }
-
-        await firstField.setValue(
-            testCase.value
-        )
-
-        await driver.pause(700)
-
-        console.log(
-            `✓ Field 1 value entered: ${testCase.value}`
-        )
-    }
 
     // ─────────────────────────────────────────
     // FIELD 2
     // ─────────────────────────────────────────
 
-    console.log(
-        '▶ Running BVA on second field after Next'
+    await runRawFieldBVA(
+        secondField,
+        'Field 2 after Next'
     )
 
-    for (
-        const testCase
-        of TEMPERATURE_BOUNDARY_CASES
-    ) {
+    // ─────────────────────────────────────────
+    // FINAL VALID VALUES
+    // ─────────────────────────────────────────
 
-        console.log(
-            `▶ Field 2 → ${testCase.value}`
-        )
+    await enterRawFieldValue(
+        firstField,
+        FINAL_VALID_TEMPERATURE
+    )
 
-        await secondField.click()
+    await driver.pause(300)
 
-        try {
-            await secondField.clearValue()
-        } catch (err) {
-            console.warn(
-                'Could not clear second field'
-            )
-        }
+    await enterRawFieldValue(
+        secondField,
+        FINAL_VALID_TEMPERATURE
+    )
 
-        await secondField.setValue(
-            testCase.value
-        )
+    await driver.pause(500)
 
-        await driver.pause(700)
+    const finalValidation =
+        await isValidationVisible()
 
-        console.log(
-            `✓ Field 2 value entered: ${testCase.value}`
+    if (finalValidation) {
+
+        throw new Error(
+            'Additional fields show validation even with final valid value 40'
         )
     }
 
     console.log(
-        '✓ Additional field BVA completed'
+        '✓ Final valid value 40 accepted in both additional fields'
+    )
+
+    console.log(
+        '════════════════════════════════════'
+    )
+
+    console.log(
+        '✓ ALL ADDITIONAL FIELD BVA TESTS PASSED'
     )
 
     console.log(
@@ -947,7 +1110,7 @@ Promise<string> {
         if (!temperatureVisible) {
 
             console.log(
-                '▶ Temperature not visible — scrolling'
+                '▶ Temperature not immediately visible — scrolling'
             )
 
             try {
@@ -955,7 +1118,7 @@ Promise<string> {
                 const temperatureElement =
                     await $(
                         'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
-                        '.scrollIntoView(new UiSelector().textMatches("^Temperature$"))'
+                        '.scrollIntoView(new UiSelector().text("Temperature"))'
                     )
 
                 temperatureVisible =
@@ -981,7 +1144,7 @@ Promise<string> {
         )
 
         console.log(
-            '✓ Clicked Temperature'
+            '✓ Selected Temperature'
         )
 
         await driver.pause(1000)
