@@ -1,4 +1,3 @@
-```typescript
 import { testBot } from '../../testbot'
 import { AndroidLocatorBuilder } from '../../TestBot/Locators/Android/AndroidLocatorBuilder'
 import { iOSLocatorBuilder } from '../../TestBot/Locators/iOS/iOSLocatorBuilder'
@@ -1653,4 +1652,3 @@ describe(
         )
     }
 )
-```
