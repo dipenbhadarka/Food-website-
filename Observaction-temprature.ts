@@ -6,9 +6,7 @@ import { TestBotElement } from '../../TestBot/TestBotElement'
 const isLocal = process.env.RUN_MODE === 'local'
 
 console.log(
-`Running Temperature Observation flow in ${
-        isLocal ? 'LOCAL PHYSICAL DEVICE' : 'BROWSERSTACK CLOUD'
-    } mode`
+Running Temperature Observation flow in ${ isLocal ? 'LOCAL PHYSICAL DEVICE' : 'BROWSERSTACK CLOUD' } mode
 )
 
 // ═══════════════════════════════════════════════
@@ -108,7 +106,6 @@ function residentLocator(
 name: string
 ): TestBotElement {
 
-```
 return {
     android: AndroidLocatorBuilder.xpath(
         `//android.widget.TextView[@text="${name}"]`
@@ -118,7 +115,6 @@ return {
         `//XCUIElementTypeStaticText[@name="${name}"]`
     ),
 } as TestBotElement
-```
 
 }
 
@@ -130,7 +126,6 @@ async function dumpPageSourceOnFailure(
 stepLabel: string
 ): Promise<void> {
 
-```
 console.error(
     `Failure at ${stepLabel} — dumping page source`
 )
@@ -201,7 +196,6 @@ try {
         srcErr
     )
 }
-```
 
 }
 
@@ -211,7 +205,6 @@ try {
 
 const selectors = {
 
-```
 adhocButton: {
     android:
         AndroidLocatorBuilder.xpath(
@@ -385,7 +378,6 @@ myCommunitiesTab: {
             '//*[@name="My Communities"]'
         ),
 } as TestBotElement,
-```
 
 }
 
@@ -395,7 +387,6 @@ myCommunitiesTab: {
 
 async function selectResident(): Promise<string> {
 
-```
 console.log(
     '▶ Searching for visible care recipients...'
 )
@@ -481,7 +472,6 @@ await dumpPageSourceOnFailure(
 throw new Error(
     'No care recipient could be selected'
 )
-```
 
 }
 
@@ -494,7 +484,6 @@ field: TestBotElement,
 value: string
 ): Promise<void> {
 
-```
 console.log(
     `▶ Entering temperature value: ${value}`
 )
@@ -552,7 +541,6 @@ try {
 console.log(
     `✓ Temperature value entered: ${value}`
 )
-```
 
 }
 
@@ -565,7 +553,6 @@ field: any,
 value: string
 ): Promise<void> {
 
-```
 await field.waitForDisplayed({
     timeout: 10000,
 })
@@ -602,7 +589,6 @@ try {
         'Keyboard already hidden'
     )
 }
-```
 
 }
 
@@ -613,13 +599,11 @@ try {
 async function isValidationVisible():
 Promise<boolean> {
 
-```
 return await testBot
     .isVisible(
         selectors.validationErrorMessage
     )
     .catch(() => false)
-```
 
 }
 
@@ -633,7 +617,6 @@ testCase: TemperatureBoundaryCase,
 validationVisible: boolean
 ): Promise<void> {
 
-```
 if (testCase.expectedValid) {
 
     if (validationVisible) {
@@ -664,7 +647,6 @@ if (!validationVisible) {
 console.log(
     `✓ PASS: ${fieldName} → ${testCase.value} correctly rejected`
 )
-```
 
 }
 
@@ -675,7 +657,6 @@ console.log(
 async function runTemperatureBoundaryValueAnalysis():
 Promise<void> {
 
-```
 console.log(
     '════════════════════════════════════'
 )
@@ -774,7 +755,6 @@ console.log(
 console.log(
     '════════════════════════════════════'
 )
-```
 
 }
 
@@ -784,7 +764,6 @@ console.log(
 
 async function getFieldsAfterNext(): Promise<any[]> {
 
-```
 const fields =
     await $$(
         '//android.widget.EditText'
@@ -804,7 +783,6 @@ if (
 }
 
 return fields
-```
 
 }
 
@@ -817,7 +795,6 @@ field: any,
 fieldName: string
 ): Promise<void> {
 
-```
 console.log(
     `▶ Resetting ${fieldName} to valid value ${FINAL_VALID_TEMPERATURE}`
 )
@@ -843,7 +820,6 @@ if (validationVisible) {
 console.log(
     `✓ ${fieldName} reset successfully`
 )
-```
 
 }
 
@@ -856,7 +832,6 @@ field: any,
 fieldName: string
 ): Promise<void> {
 
-```
 console.log(
     '────────────────────────────────────'
 )
@@ -918,7 +893,6 @@ await resetRawFieldToValidValue(
 console.log(
     `✓ ${fieldName} BVA PASSED`
 )
-```
 
 }
 
@@ -929,7 +903,6 @@ console.log(
 async function runAdditionalFieldsBVA():
 Promise<void> {
 
-```
 console.log(
     '════════════════════════════════════'
 )
@@ -1004,7 +977,6 @@ console.log(
 console.log(
     '════════════════════════════════════'
 )
-```
 
 }
 
@@ -1015,7 +987,6 @@ console.log(
 async function navigateToTemperature():
 Promise<string> {
 
-```
 try {
 
     const residentName =
@@ -1144,7 +1115,6 @@ try {
 
     throw err
 }
-```
 
 }
 
@@ -1155,7 +1125,6 @@ try {
 async function clickNext():
 Promise<void> {
 
-```
 console.log(
     '▶ Preparing to continue from Temperature'
 )
@@ -1238,7 +1207,6 @@ console.log(
 )
 
 await driver.pause(2000)
-```
 
 }
 
@@ -1249,7 +1217,6 @@ await driver.pause(2000)
 async function enterFinalTemperature():
 Promise<void> {
 
-```
 console.log(
     `▶ Confirming final valid temperature: ${FINAL_VALID_TEMPERATURE}`
 )
@@ -1335,7 +1302,6 @@ try {
 console.log(
     `✓ Final Temperature ${FINAL_VALID_TEMPERATURE} accepted`
 )
-```
 
 }
 
@@ -1346,7 +1312,6 @@ console.log(
 async function completeCloseNavigation():
 Promise<void> {
 
-```
 console.log(
     '════════ FINAL CLOSE FLOW ════════'
 )
@@ -1422,7 +1387,6 @@ console.log(
 console.log(
     '════════ CLOSE FLOW COMPLETE ════════'
 )
-```
 
 }
 
@@ -1434,7 +1398,6 @@ describe(
 'Resident Area Profile - Observations - Temperature - Boundary Value Analysis',
 () => {
 
-```
     let residentName = ''
 
     it(
@@ -1543,3 +1506,5 @@ describe(
         }
     )
 }
+
+)
