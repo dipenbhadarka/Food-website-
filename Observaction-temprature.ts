@@ -1,3 +1,4 @@
+```typescript
 import { testBot } from '../../testbot'
 import { AndroidLocatorBuilder } from '../../TestBot/Locators/Android/AndroidLocatorBuilder'
 import { iOSLocatorBuilder } from '../../TestBot/Locators/iOS/iOSLocatorBuilder'
@@ -38,17 +39,17 @@ const CARE_RECIPIENTS = [
 ]
 
 // ═══════════════════════════════════════════════
-// BOUNDARY VALUE ANALYSIS
+// TEMPERATURE BOUNDARY VALUE ANALYSIS
 //
 // Accepted range: 30 - 50
 //
-// 29 = Min - 1 → INVALID
-// 30 = Min     → VALID
-// 31 = Min + 1 → VALID
-// 40 = Normal   → VALID
-// 49 = Max - 1 → VALID
-// 50 = Max     → VALID
-// 51 = Max + 1 → INVALID
+// 29 = INVALID
+// 30 = VALID
+// 31 = VALID
+// 40 = VALID
+// 49 = VALID
+// 50 = VALID
+// 51 = INVALID
 // ═══════════════════════════════════════════════
 
 const TEMPERATURE_MIN = 30
@@ -107,6 +108,7 @@ const FINAL_VALID_TEMPERATURE = '40'
 function residentLocator(
     name: string
 ): TestBotElement {
+
     return {
         android: AndroidLocatorBuilder.xpath(
             `//android.widget.TextView[@text="${name}"]`
@@ -125,11 +127,13 @@ function residentLocator(
 async function dumpPageSourceOnFailure(
     stepLabel: string
 ): Promise<void> {
+
     console.error(
         `Failure at ${stepLabel} — dumping page source`
     )
 
     try {
+
         const pageSource =
             await driver.getPageSource()
 
@@ -144,6 +148,7 @@ async function dumpPageSourceOnFailure(
         )
 
         try {
+
             const fs = require('fs')
             const path = require('path')
 
@@ -160,6 +165,7 @@ async function dumpPageSourceOnFailure(
                 )
 
             if (!fs.existsSync(outDir)) {
+
                 fs.mkdirSync(
                     outDir,
                     {
@@ -176,13 +182,17 @@ async function dumpPageSourceOnFailure(
                 pageSource,
                 'utf-8'
             )
+
         } catch (writeErr) {
+
             console.warn(
                 'Could not save page source:',
                 writeErr
             )
         }
+
     } catch (srcErr) {
+
         console.error(
             'Could not get page source:',
             srcErr
@@ -436,6 +446,7 @@ async function selectResident(): Promise<string> {
                 .catch(() => false)
 
         if (visible) {
+
             visibleResidents.push(name)
         }
     }
@@ -459,7 +470,7 @@ async function selectResident(): Promise<string> {
     }
 
     // ─────────────────────────────────────────
-    // Scroll fallback
+    // SCROLL FALLBACK
     // ─────────────────────────────────────────
 
     console.log(
@@ -512,7 +523,18 @@ async function selectResident(): Promise<string> {
 }
 
 // ═══════════════════════════════════════════════
-// ENTER VALUE INTO TESTBOT FIELD
+// ENTER TEMPERATURE VALUE
+//
+// IMPORTANT:
+//
+// This function ONLY works with the already
+// selected Temperature input.
+//
+// It does NOT click Temperature section.
+//
+// It does NOT click Temperature time control.
+//
+// This prevents the select → deselect issue.
 // ═══════════════════════════════════════════════
 
 async function enterValue(
@@ -520,49 +542,60 @@ async function enterValue(
     value: string
 ): Promise<void> {
 
+    console.log(
+        `▶ Entering temperature value: ${value}`
+    )
+
     await testBot.waitUntilVisible(
         field,
         10000
     )
 
-    await testBot.click(field)
+    // Get the actual WebDriver locator.
+    const locator =
+        await (
+            testBot as any
+        ).getLocatorTextForElement(field)
+
+    const inputElement =
+        await $(locator)
+
+    await inputElement.waitForDisplayed({
+        timeout: 10000,
+    })
+
+    // IMPORTANT:
+    // Click ONLY the input field.
+    //
+    // We do NOT click Temperature itself.
+    await inputElement.click()
 
     await driver.pause(300)
 
+    // Clear previous value.
     try {
-
-        const inputElement =
-            await $(
-                await (
-                    testBot as any
-                ).getLocatorTextForElement(
-                    field
-                )
-            )
 
         await inputElement.clearValue()
 
     } catch (clearErr) {
 
         console.warn(
-            'Could not clear field:',
+            `Could not clear temperature field before entering ${value}:`,
             clearErr
         )
     }
 
-    await testBot.enterText(
-        field,
-        value,
-        false
-    )
+    // Enter value directly.
+    await inputElement.setValue(value)
 
-    await driver.pause(600)
+    await driver.pause(700)
 
+    // Hide keyboard.
     try {
 
         await driver.hideKeyboard()
 
-        await driver.pause(500)
+        await driver.pause(400)
 
     } catch (err) {
 
@@ -570,12 +603,16 @@ async function enterValue(
             'Keyboard already hidden'
         )
     }
+
+    console.log(
+        `✓ Temperature value entered: ${value}`
+    )
 }
 
 // ═══════════════════════════════════════════════
-// ENTER VALUE INTO RAW WEBDRIVER ELEMENT
+// ENTER RAW FIELD VALUE
 //
-// Used for the two fields displayed after Next.
+// Used for fields displayed after Next.
 // ═══════════════════════════════════════════════
 
 async function enterRawFieldValue(
@@ -601,7 +638,6 @@ async function enterRawFieldValue(
             'Could not clear raw field:',
             clearErr
         )
-
     }
 
     await field.setValue(value)
@@ -680,6 +716,11 @@ async function assertBoundaryResult(
 
 // ═══════════════════════════════════════════════
 // SELECT TEMPERATURE TIME
+//
+// THIS IS CALLED ONLY ONCE.
+//
+// After this function finishes, BVA only changes
+// the input field.
 // ═══════════════════════════════════════════════
 
 async function selectTemperatureTime():
@@ -707,6 +748,18 @@ Promise<void> {
 
 // ═══════════════════════════════════════════════
 // TEMPERATURE BVA
+//
+// IMPORTANT:
+//
+// Temperature is selected ONLY ONCE in
+// navigateToTemperature().
+//
+// This function NEVER clicks:
+//     temperatureText
+//     temperatureTimeButton
+//
+// It only changes the value inside the
+// already-selected Temperature input.
 // ═══════════════════════════════════════════════
 
 async function runTemperatureBoundaryValueAnalysis():
@@ -728,10 +781,19 @@ Promise<void> {
         '════════════════════════════════════'
     )
 
+    await testBot.waitUntilVisible(
+        selectors.temperatureInputField,
+        10000
+    )
+
     for (
         const testCase
         of TEMPERATURE_BOUNDARY_CASES
     ) {
+
+        console.log(
+            '────────────────────────────────────'
+        )
 
         console.log(
             `▶ Testing Temperature: ${testCase.value}`
@@ -741,12 +803,18 @@ Promise<void> {
             `▶ ${testCase.description}`
         )
 
+        // IMPORTANT:
+        //
+        // Only update the input value.
+        //
+        // No Temperature selection here.
+        // No Temperature deselection here.
         await enterValue(
             selectors.temperatureInputField,
             testCase.value
         )
 
-        await driver.pause(700)
+        await driver.pause(800)
 
         const validationVisible =
             await isValidationVisible()
@@ -757,15 +825,56 @@ Promise<void> {
             validationVisible
         )
 
+        console.log(
+            `✓ Completed Temperature test: ${testCase.value}`
+        )
+
         await driver.pause(500)
     }
 
+    // ═══════════════════════════════════════════
+    // FINAL VALID VALUE
+    //
+    // Leave Temperature at 40 so Step 3 can
+    // immediately click Next.
+    // ═══════════════════════════════════════════
+
     console.log(
-        '════════════════════════════════════'
+        '────────────────────────────────────'
     )
 
     console.log(
-        '✓ ALL TEMPERATURE BOUNDARY TESTS PASSED'
+        `▶ Setting final valid Temperature: ${FINAL_VALID_TEMPERATURE}`
+    )
+
+    await enterValue(
+        selectors.temperatureInputField,
+        FINAL_VALID_TEMPERATURE
+    )
+
+    await driver.pause(800)
+
+    const finalValidationVisible =
+        await isValidationVisible()
+
+    if (finalValidationVisible) {
+
+        throw new Error(
+            `Final Temperature value ${FINAL_VALID_TEMPERATURE} ` +
+            `is showing validation`
+        )
+    }
+
+    console.log(
+        `✓ Temperature remains selected with value ${FINAL_VALID_TEMPERATURE}`
+    )
+
+    console.log(
+        '✓ Temperature BVA completed successfully'
+    )
+
+    console.log(
+        '✓ Continuing script without deselecting Temperature'
     )
 
     console.log(
@@ -775,12 +884,6 @@ Promise<void> {
 
 // ═══════════════════════════════════════════════
 // GET FIELDS AFTER NEXT
-//
-// Existing implementation uses the first two
-// android.widget.EditText elements.
-//
-// Keep this because these are the same locators
-// currently used in your working script.
 // ═══════════════════════════════════════════════
 
 async function getFieldsAfterNext(): Promise<any[]> {
@@ -807,15 +910,7 @@ async function getFieldsAfterNext(): Promise<any[]> {
 }
 
 // ═══════════════════════════════════════════════
-// RESET FIELD TO VALID VALUE
-//
-// This is important for BVA.
-//
-// If the previous test entered 29 or 51,
-// validation may still be visible.
-//
-// We first enter 40 to reset the field,
-// then execute the actual boundary case.
+// RESET RAW FIELD
 // ═══════════════════════════════════════════════
 
 async function resetRawFieldToValidValue(
@@ -852,18 +947,6 @@ async function resetRawFieldToValidValue(
 
 // ═══════════════════════════════════════════════
 // RUN BVA AGAINST RAW FIELD
-//
-// This is the important correction.
-//
-// Previously:
-//     enter value
-//     log value
-//
-// Now:
-//     enter value
-//     check validation
-//     compare actual result with expected result
-//     fail test when behaviour is incorrect
 // ═══════════════════════════════════════════════
 
 async function runRawFieldBVA(
@@ -900,14 +983,13 @@ async function runRawFieldBVA(
             `▶ ${testCase.description}`
         )
 
-        // Always reset before every boundary case.
-        // This prevents the previous invalid value
-        // from affecting the next assertion.
+        // Reset before every test.
         await resetRawFieldToValidValue(
             field,
             fieldName
         )
 
+        // Enter actual BVA value.
         await enterRawFieldValue(
             field,
             testCase.value
@@ -927,7 +1009,7 @@ async function runRawFieldBVA(
         await driver.pause(500)
     }
 
-    // Leave the field with a valid value.
+    // Leave field valid.
     await resetRawFieldToValidValue(
         field,
         fieldName
@@ -939,7 +1021,7 @@ async function runRawFieldBVA(
 }
 
 // ═══════════════════════════════════════════════
-// BVA FOR BOTH FIELDS AFTER NEXT
+// ADDITIONAL FIELDS BVA
 // ═══════════════════════════════════════════════
 
 async function runAdditionalFieldsBVA():
@@ -1035,6 +1117,8 @@ Promise<void> {
 
 // ═══════════════════════════════════════════════
 // NAVIGATE TO TEMPERATURE
+//
+// Temperature is selected ONLY ONCE here.
 // ═══════════════════════════════════════════════
 
 async function navigateToTemperature():
@@ -1043,14 +1127,14 @@ Promise<string> {
     try {
 
         // ─────────────────────────────────────
-        // Resident
+        // RESIDENT
         // ─────────────────────────────────────
 
         const residentName =
             await selectResident()
 
         // ─────────────────────────────────────
-        // Adhoc
+        // ADHOC
         // ─────────────────────────────────────
 
         await testBot.waitUntilVisible(
@@ -1069,7 +1153,7 @@ Promise<string> {
         await driver.pause(2000)
 
         // ─────────────────────────────────────
-        // Expand all
+        // EXPAND ALL
         // ─────────────────────────────────────
 
         try {
@@ -1097,7 +1181,7 @@ Promise<string> {
         }
 
         // ─────────────────────────────────────
-        // Temperature
+        // TEMPERATURE
         // ─────────────────────────────────────
 
         let temperatureVisible =
@@ -1139,6 +1223,13 @@ Promise<string> {
             )
         }
 
+        // ═════════════════════════════════════
+        // SELECT TEMPERATURE
+        //
+        // THIS IS THE ONLY PLACE WHERE
+        // TEMPERATURE IS SELECTED.
+        // ═════════════════════════════════════
+
         await testBot.click(
             selectors.temperatureText
         )
@@ -1149,14 +1240,16 @@ Promise<string> {
 
         await driver.pause(1000)
 
-        // ─────────────────────────────────────
-        // Click temperature time
-        // ─────────────────────────────────────
+        // ═════════════════════════════════════
+        // OPEN TEMPERATURE TIME CONTROL
+        //
+        // THIS IS ALSO DONE ONLY ONCE.
+        // ═════════════════════════════════════
 
         await selectTemperatureTime()
 
         // ─────────────────────────────────────
-        // Temperature input
+        // TEMPERATURE INPUT
         // ─────────────────────────────────────
 
         await testBot.waitUntilVisible(
@@ -1182,16 +1275,37 @@ Promise<string> {
 
 // ═══════════════════════════════════════════════
 // CLICK NEXT
+//
+// No Temperature click here.
+// Temperature stays selected.
 // ═══════════════════════════════════════════════
 
 async function clickNext():
 Promise<void> {
+
+    console.log(
+        '▶ Preparing to continue from Temperature'
+    )
+
+    await testBot.waitUntilVisible(
+        selectors.temperatureInputField,
+        10000
+    )
+
+    console.log(
+        `✓ Temperature value ${FINAL_VALID_TEMPERATURE} is ready`
+    )
 
     await testBot.waitUntilVisible(
         selectors.nextButton,
         10000
     )
 
+    // IMPORTANT:
+    //
+    // Click Next directly.
+    //
+    // Temperature is NOT clicked again.
     await testBot.click(
         selectors.nextButton
     )
@@ -1204,27 +1318,84 @@ Promise<void> {
 }
 
 // ═══════════════════════════════════════════════
-// FINAL VALID TEMPERATURE
+// FINAL TEMPERATURE
+//
+// The BVA already leaves Temperature at 40.
+//
+// This function simply verifies that the final
+// value is still valid.
+//
+// It does NOT click Temperature again.
 // ═══════════════════════════════════════════════
 
 async function enterFinalTemperature():
 Promise<void> {
 
     console.log(
-        `▶ Entering final valid temperature: ${FINAL_VALID_TEMPERATURE}`
+        `▶ Confirming final valid temperature: ${FINAL_VALID_TEMPERATURE}`
     )
 
-    await enterValue(
+    await testBot.waitUntilVisible(
         selectors.temperatureInputField,
-        FINAL_VALID_TEMPERATURE
+        10000
     )
+
+    const locator =
+        await (
+            testBot as any
+        ).getLocatorTextForElement(
+            selectors.temperatureInputField
+        )
+
+    const inputElement =
+        await $(locator)
+
+    await inputElement.waitForDisplayed({
+        timeout: 10000,
+    })
+
+    let currentValue = ''
+
+    try {
+
+        currentValue =
+            await inputElement.getValue()
+
+    } catch (err) {
+
+        console.warn(
+            'Could not read current temperature value'
+        )
+    }
+
+    console.log(
+        `▶ Current Temperature value: "${currentValue}"`
+    )
+
+    // If BVA already left 40, do nothing.
+    //
+    // If the application cleared the value,
+    // enter 40 without selecting Temperature.
+    if (
+        currentValue !== FINAL_VALID_TEMPERATURE
+    ) {
+
+        console.log(
+            `▶ Setting Temperature to ${FINAL_VALID_TEMPERATURE}`
+        )
+
+        await enterValue(
+            selectors.temperatureInputField,
+            FINAL_VALID_TEMPERATURE
+        )
+    }
+
+    await driver.pause(700)
 
     const validationVisible =
         await isValidationVisible()
 
-    if (
-        validationVisible
-    ) {
+    if (validationVisible) {
 
         throw new Error(
             `Final valid temperature ${FINAL_VALID_TEMPERATURE} shows validation`
@@ -1232,7 +1403,7 @@ Promise<void> {
     }
 
     console.log(
-        '✓ Final valid temperature accepted'
+        `✓ Final Temperature ${FINAL_VALID_TEMPERATURE} accepted`
     )
 }
 
@@ -1248,7 +1419,7 @@ Promise<void> {
     )
 
     // ─────────────────────────────────────────
-    // Bottom Close
+    // BOTTOM CLOSE
     // ─────────────────────────────────────────
 
     await testBot.waitUntilVisible(
@@ -1267,7 +1438,7 @@ Promise<void> {
     await driver.pause(2000)
 
     // ─────────────────────────────────────────
-    // Earlier
+    // EARLIER
     // ─────────────────────────────────────────
 
     await testBot.waitUntilVisible(
@@ -1286,7 +1457,7 @@ Promise<void> {
     await driver.pause(2000)
 
     // ─────────────────────────────────────────
-    // Right Close
+    // RIGHT CLOSE
     // ─────────────────────────────────────────
 
     await testBot.waitUntilVisible(
@@ -1305,7 +1476,7 @@ Promise<void> {
     await driver.pause(2000)
 
     // ─────────────────────────────────────────
-    // My Communities
+    // MY COMMUNITIES
     // ─────────────────────────────────────────
 
     await testBot.waitUntilVisible(
@@ -1410,8 +1581,12 @@ describe(
 
                 try {
 
+                    // Confirm 40 is present.
+                    //
+                    // This does NOT select/deselect Temperature.
                     await enterFinalTemperature()
 
+                    // Continue directly.
                     await clickNext()
 
                 } catch (err) {
@@ -1427,7 +1602,7 @@ describe(
 
         // ═══════════════════════════════════════
         // STEP 4
-        // TWO FIELDS AFTER TEMPERATURE
+        // TWO FIELDS AFTER NEXT
         // ═══════════════════════════════════════
 
         it(
@@ -1478,3 +1653,4 @@ describe(
         )
     }
 )
+```
