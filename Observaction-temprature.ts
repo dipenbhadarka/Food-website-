@@ -82,7 +82,7 @@ const TEMPERATURE_BOUNDARY_CASES: TemperatureBoundaryCase[] = [
         description: 'Normal valid value',
     },
     {
-        value: String(TEMPERATURE_MAX - 1),
+        value: String(TEMPERATURE_MAX  1),
         expectedValid: true,
         description: 'Maximum - 1',
     },
@@ -92,7 +92,7 @@ const TEMPERATURE_BOUNDARY_CASES: TemperatureBoundaryCase[] = [
         description: 'Maximum boundary',
     },
     {
-        value: String(TEMPERATURE_MAX + 1),
+        value: String(TEMPERATURE_MAX  1),
         expectedValid: false,
         description: 'Maximum + 1',
     },
