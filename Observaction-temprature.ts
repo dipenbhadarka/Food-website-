@@ -238,11 +238,7 @@ const selectors = {
     } as TestBotElement,
 
     // ─────────────────────────────────────────
-    // TEMPERATURE
-    //
-    // IMPORTANT:
-    // This is the ONLY Temperature selector
-    // that is clicked.
+    // TEMPERATURE TEXT
     // ─────────────────────────────────────────
 
     temperatureText: {
@@ -254,6 +250,25 @@ const selectors = {
         ios:
             iOSLocatorBuilder.xpath(
                 '//XCUIElementTypeStaticText[@name="Temperature"]'
+            ),
+    } as TestBotElement,
+
+    // ─────────────────────────────────────────
+    // TEMPERATURE SELECTION
+    //
+    // EXACT EXISTING XPATH
+    // THIS IS CLICKED ONCE
+    // ─────────────────────────────────────────
+
+    temperatureSelectionButton: {
+        android:
+            AndroidLocatorBuilder.xpath(
+                '//androidx.recyclerview.widget.RecyclerView/android.view.ViewGroup[4]/android.view.ViewGroup/android.view.ViewGroup[3]/android.view.ViewGroup/android.widget.ImageView'
+            ),
+
+        ios:
+            iOSLocatorBuilder.xpath(
+                '//XCUIElementTypeImage'
             ),
     } as TestBotElement,
 
@@ -511,19 +526,6 @@ async function selectResident(): Promise<string> {
 
 // ═══════════════════════════════════════════════
 // ENTER TEMPERATURE VALUE
-//
-// IMPORTANT:
-//
-// This function ONLY works with the already
-// selected Temperature input.
-//
-// It NEVER clicks:
-// - Temperature section
-// - Temperature ImageView
-// - Temperature time/picker
-//
-// Therefore changing BVA values cannot
-// select/deselect Temperature.
 // ═══════════════════════════════════════════════
 
 async function enterValue(
@@ -552,10 +554,6 @@ async function enterValue(
         timeout: 10000,
     })
 
-    // IMPORTANT:
-    // Click ONLY the EditText/TextField.
-    //
-    // Never click the Temperature TextView again.
     await inputElement.click()
 
     await driver.pause(300)
@@ -572,7 +570,6 @@ async function enterValue(
         )
     }
 
-    // Directly set the input value.
     await inputElement.setValue(value)
 
     await driver.pause(700)
@@ -597,8 +594,6 @@ async function enterValue(
 
 // ═══════════════════════════════════════════════
 // ENTER RAW FIELD VALUE
-//
-// Used for fields displayed after Next.
 // ═══════════════════════════════════════════════
 
 async function enterRawFieldValue(
@@ -702,17 +697,6 @@ async function assertBoundaryResult(
 
 // ═══════════════════════════════════════════════
 // TEMPERATURE BVA
-//
-// Temperature has already been selected ONCE
-// before this function is called.
-//
-// This function ONLY changes the EditText value.
-//
-// It NEVER clicks:
-// - temperatureText
-// - temperatureTimeButton
-// - ImageView
-// - Temperature sign
 // ═══════════════════════════════════════════════
 
 async function runTemperatureBoundaryValueAnalysis():
@@ -756,7 +740,6 @@ Promise<void> {
             `▶ ${testCase.description}`
         )
 
-        // Only modify the input.
         await enterValue(
             selectors.temperatureInputField,
             testCase.value
@@ -779,10 +762,6 @@ Promise<void> {
 
         await driver.pause(500)
     }
-
-    // ═══════════════════════════════════════════
-    // FINAL VALID VALUE
-    // ═══════════════════════════════════════════
 
     console.log(
         '────────────────────────────────────'
@@ -816,10 +795,6 @@ Promise<void> {
 
     console.log(
         '✓ Temperature BVA completed successfully'
-    )
-
-    console.log(
-        '✓ No Temperature sign/image was clicked during BVA'
     )
 
     console.log(
@@ -994,27 +969,15 @@ Promise<void> {
     const secondField =
         fields[1]
 
-    // ─────────────────────────────────────────
-    // FIELD 1
-    // ─────────────────────────────────────────
-
     await runRawFieldBVA(
         firstField,
         'Field 1 after Next'
     )
 
-    // ─────────────────────────────────────────
-    // FIELD 2
-    // ─────────────────────────────────────────
-
     await runRawFieldBVA(
         secondField,
         'Field 2 after Next'
     )
-
-    // ─────────────────────────────────────────
-    // FINAL VALID VALUES
-    // ─────────────────────────────────────────
 
     await enterRawFieldValue(
         firstField,
@@ -1060,11 +1023,7 @@ Promise<void> {
 // ═══════════════════════════════════════════════
 // NAVIGATE TO TEMPERATURE
 //
-// IMPORTANT:
-// Temperature is selected ONLY ONCE here.
-//
-// There is NO ImageView click.
-// There is NO Temperature time click.
+// Temperature ImageView is clicked ONCE.
 // ═══════════════════════════════════════════════
 
 async function navigateToTemperature():
@@ -1072,16 +1031,8 @@ Promise<string> {
 
     try {
 
-        // ─────────────────────────────────────
-        // RESIDENT
-        // ─────────────────────────────────────
-
         const residentName =
             await selectResident()
-
-        // ─────────────────────────────────────
-        // ADHOC
-        // ─────────────────────────────────────
 
         await testBot.waitUntilVisible(
             selectors.adhocButton,
@@ -1097,10 +1048,6 @@ Promise<string> {
         )
 
         await driver.pause(2000)
-
-        // ─────────────────────────────────────
-        // EXPAND ALL
-        // ─────────────────────────────────────
 
         try {
 
@@ -1125,10 +1072,6 @@ Promise<string> {
                 'Expand-all button unavailable — continuing'
             )
         }
-
-        // ─────────────────────────────────────
-        // FIND TEMPERATURE
-        // ─────────────────────────────────────
 
         let temperatureVisible =
             await testBot
@@ -1172,16 +1115,21 @@ Promise<string> {
         // ═════════════════════════════════════
         // SELECT TEMPERATURE
         //
-        // THIS IS THE ONLY TEMPERATURE CLICK
-        // IN THE ENTIRE SCRIPT.
+        // EXACT USER-PROVIDED XPATH
+        // CLICKED ONLY ONCE
         // ═════════════════════════════════════
 
         console.log(
-            '▶ Selecting Temperature ONCE'
+            '▶ Selecting Temperature using ImageView'
+        )
+
+        await testBot.waitUntilVisible(
+            selectors.temperatureSelectionButton,
+            10000
         )
 
         await testBot.click(
-            selectors.temperatureText
+            selectors.temperatureSelectionButton
         )
 
         console.log(
@@ -1191,26 +1139,8 @@ Promise<string> {
         await driver.pause(1200)
 
         // ═════════════════════════════════════
-        // IMPORTANT
-        //
-        // DO NOT CLICK:
-        //
-        // //androidx.recyclerview.widget.RecyclerView/
-        // android.view.ViewGroup[4]/
-        // android.view.ViewGroup/
-        // android.view.ViewGroup[3]/
-        // android.view.ViewGroup/
-        // android.widget.ImageView
-        //
-        // That ImageView is the sign/control that
-        // was causing the select/deselect problem.
-        //
-        // We go directly to the input field.
+        // TEMPERATURE INPUT
         // ═════════════════════════════════════
-
-        console.log(
-            '▶ Waiting for Temperature input field'
-        )
 
         await testBot.waitUntilVisible(
             selectors.temperatureInputField,
@@ -1235,9 +1165,6 @@ Promise<string> {
 
 // ═══════════════════════════════════════════════
 // CLICK NEXT
-//
-// Temperature is NOT clicked again.
-// ImageView is NOT clicked.
 // ═══════════════════════════════════════════════
 
 async function clickNext():
@@ -1261,7 +1188,6 @@ Promise<void> {
         10000
     )
 
-    // Click Next directly.
     await testBot.click(
         selectors.nextButton
     )
@@ -1275,10 +1201,6 @@ Promise<void> {
 
 // ═══════════════════════════════════════════════
 // FINAL TEMPERATURE
-//
-// BVA already leaves Temperature at 40.
-//
-// This function does NOT click Temperature.
 // ═══════════════════════════════════════════════
 
 async function enterFinalTemperature():
@@ -1325,10 +1247,6 @@ Promise<void> {
         `▶ Current Temperature value: "${currentValue}"`
     )
 
-    // If BVA already left 40, do nothing.
-    //
-    // If the application cleared the value,
-    // enter 40 directly into the input.
     if (
         currentValue !== FINAL_VALID_TEMPERATURE
     ) {
@@ -1371,10 +1289,6 @@ Promise<void> {
         '════════ FINAL CLOSE FLOW ════════'
     )
 
-    // ─────────────────────────────────────────
-    // BOTTOM CLOSE
-    // ─────────────────────────────────────────
-
     await testBot.waitUntilVisible(
         selectors.careNoteBottomCloseButton,
         10000
@@ -1389,10 +1303,6 @@ Promise<void> {
     )
 
     await driver.pause(2000)
-
-    // ─────────────────────────────────────────
-    // EARLIER
-    // ─────────────────────────────────────────
 
     await testBot.waitUntilVisible(
         selectors.earlierTab,
@@ -1409,10 +1319,6 @@ Promise<void> {
 
     await driver.pause(2000)
 
-    // ─────────────────────────────────────────
-    // RIGHT CLOSE
-    // ─────────────────────────────────────────
-
     await testBot.waitUntilVisible(
         selectors.earlierRightCloseIcon,
         10000
@@ -1427,10 +1333,6 @@ Promise<void> {
     )
 
     await driver.pause(2000)
-
-    // ─────────────────────────────────────────
-    // MY COMMUNITIES
-    // ─────────────────────────────────────────
 
     await testBot.waitUntilVisible(
         selectors.myCommunitiesTab,
@@ -1470,11 +1372,6 @@ describe(
 
         let residentName = ''
 
-        // ═══════════════════════════════════════
-        // STEP 1
-        // NAVIGATION
-        // ═══════════════════════════════════════
-
         it(
             'Step 1 - Navigate to Temperature entry screen',
             async function () {
@@ -1499,11 +1396,6 @@ describe(
             }
         )
 
-        // ═══════════════════════════════════════
-        // STEP 2
-        // TEMPERATURE BVA
-        // ═══════════════════════════════════════
-
         it(
             'Step 2 - Run Temperature Boundary Value Analysis 30-50',
             async function () {
@@ -1522,11 +1414,6 @@ describe(
                 }
             }
         )
-
-        // ═══════════════════════════════════════
-        // STEP 3
-        // FINAL TEMPERATURE + NEXT
-        // ═══════════════════════════════════════
 
         it(
             'Step 3 - Enter valid temperature and click Next',
@@ -1549,11 +1436,6 @@ describe(
             }
         )
 
-        // ═══════════════════════════════════════
-        // STEP 4
-        // TWO FIELDS AFTER NEXT
-        // ═══════════════════════════════════════
-
         it(
             'Step 4 - Run BVA for two fields after Temperature',
             async function () {
@@ -1572,11 +1454,6 @@ describe(
                 }
             }
         )
-
-        // ═══════════════════════════════════════
-        // STEP 5
-        // CLOSE FLOW
-        // ═══════════════════════════════════════
 
         it(
             'Step 5 - Close and verify My Communities',
