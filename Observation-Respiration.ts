@@ -643,8 +643,18 @@ async function completeCareNote(): Promise<void> {
         await testBot.click(selectors.createRecordsButton)
         await driver.pause(2000)
 
-        // Go to the Earlier page first, then Close from there, and
-        // confirm redirected back to Communities.
+        // Bottom Close button on the record-confirmation screen —
+        // this was previously missing from the flow (only the
+        // top-right earlierCloseButton was wired in), which is
+        // why Close appeared not to do anything: this button was
+        // never actually clicked.
+        await testBot.waitUntilVisible(selectors.closeButton, 10000)
+        await testBot.click(selectors.closeButton)
+        console.log('Clicked bottom Close button')
+        await driver.pause(2000)
+
+        // Go to the Earlier page next, then Close from there (top-
+        // right icon), and confirm redirected back to Communities.
         await testBot.waitUntilVisible(selectors.earlierTab, 10000)
         await testBot.click(selectors.earlierTab)
         await driver.pause(2000)
