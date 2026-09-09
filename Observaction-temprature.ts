@@ -1,1511 +1,655 @@
 import { testBot } from '../../testbot'
+
 import { AndroidLocatorBuilder } from '../../TestBot/Locators/Android/AndroidLocatorBuilder'
+
 import { iOSLocatorBuilder } from '../../TestBot/Locators/iOS/iOSLocatorBuilder'
+
 import { TestBotElement } from '../../TestBot/TestBotElement'
 
-const isLocal = process.env.RUN_MODE === 'local'
+const NON_BASELINE_RESIDENT =
 
-console.log(
-Running Temperature Observation flow in ${ isLocal ? 'LOCAL PHYSICAL DEVICE' : 'BROWSERSTACK CLOUD' } mode
-)
+    process.env.TEMPERATURE_NON_BASELINE_RESIDENT || 'Ah-Na Gravy'
 
-// ═══════════════════════════════════════════════
-// CARE RECIPIENTS
-// ═══════════════════════════════════════════════
+const BASELINE_RESIDENT =
 
-const CARE_RECIPIENTS = [
-'Ah-Na Gravy',
-'Alan Gravy',
-'Albie Armstrong',
-'Arturo Reyes',
-'Benita Reyes',
-'Brenda Brown',
-'Charlotte Crawley',
-'Freya Farrow',
-'Gaz Garfield',
-'Harriet Harper',
-'Ingrid Ingleberry',
-'Jo Johnson',
-'Mack Michaels',
-'Maureeen Moor',
-'Rico Dawson',
-'Robyn Partridge',
-'Rosie Matthews',
-'Victor Willson',
-'Yasmine Young',
-]
+    process.env.TEMPERATURE_BASELINE_RESIDENT || 'Albie Armstrong'
 
-// ═══════════════════════════════════════════════
-// TEMPERATURE BOUNDARY VALUE ANALYSIS
-// ═══════════════════════════════════════════════
+const CLINICAL_MIN = 30
 
-const TEMPERATURE_MIN = 30
-const TEMPERATURE_MAX = 50
+const CLINICAL_MAX = 50
 
-interface TemperatureBoundaryCase {
-value: string
-expectedValid: boolean
-description: string
+const BASELINE_MIN = 36
+
+const BASELINE_MAX = 41
+
+const VALID_TEMPERATURE = '40'
+
+function locator(androidXpath: string, iosXpath: string): TestBotElement {
+
+    return {
+
+        android: AndroidLocatorBuilder.xpath(androidXpath),
+
+        ios: iOSLocatorBuilder.xpath(iosXpath),
+
+    } as TestBotElement
+
 }
 
-const TEMPERATURE_BOUNDARY_CASES: TemperatureBoundaryCase[] = [
-{
-value: String(TEMPERATURE_MIN - 1),
-expectedValid: false,
-description: 'Minimum - 1',
-},
-{
-value: String(TEMPERATURE_MIN),
-expectedValid: true,
-description: 'Minimum boundary',
-},
-{
-value: String(TEMPERATURE_MIN + 1),
-expectedValid: true,
-description: 'Minimum + 1',
-},
-{
-value: '40',
-expectedValid: true,
-description: 'Normal valid value',
-},
-{
-value: String(TEMPERATURE_MAX - 1),
-expectedValid: true,
-description: 'Maximum - 1',
-},
-{
-value: String(TEMPERATURE_MAX),
-expectedValid: true,
-description: 'Maximum boundary',
-},
-{
-value: String(TEMPERATURE_MAX + 1),
-expectedValid: false,
-description: 'Maximum + 1',
-},
-]
+function residentLocator(name: string): TestBotElement {
 
-const FINAL_VALID_TEMPERATURE = '40'
+    return locator(
 
-// ═══════════════════════════════════════════════
-// RESIDENT LOCATOR
-// ═══════════════════════════════════════════════
+        `//android.widget.TextView[@text="${name}"]`,
 
-function residentLocator(
-name: string
-): TestBotElement {
-
-return {
-    android: AndroidLocatorBuilder.xpath(
-        `//android.widget.TextView[@text="${name}"]`
-    ),
-
-    ios: iOSLocatorBuilder.xpath(
         `//XCUIElementTypeStaticText[@name="${name}"]`
-    ),
-} as TestBotElement
 
-}
-
-// ═══════════════════════════════════════════════
-// PAGE SOURCE DUMP
-// ═══════════════════════════════════════════════
-
-async function dumpPageSourceOnFailure(
-stepLabel: string
-): Promise<void> {
-
-console.error(
-    `Failure at ${stepLabel} — dumping page source`
-)
-
-try {
-
-    const pageSource =
-        await driver.getPageSource()
-
-    console.log(
-        `──────── PAGE SOURCE: ${stepLabel} ────────`
     )
 
-    console.log(pageSource)
-
-    console.log(
-        '────────────────────────────────────────'
-    )
-
-    try {
-
-        const fs = require('fs')
-        const path = require('path')
-
-        const safeName =
-            stepLabel.replace(
-                /[^a-z0-9.]+/gi,
-                '_'
-            )
-
-        const outDir =
-            path.resolve(
-                __dirname,
-                '../../../../run'
-            )
-
-        if (!fs.existsSync(outDir)) {
-
-            fs.mkdirSync(
-                outDir,
-                {
-                    recursive: true,
-                }
-            )
-        }
-
-        fs.writeFileSync(
-            path.join(
-                outDir,
-                `temperature_obs_failure_${safeName}.xml`
-            ),
-            pageSource,
-            'utf-8'
-        )
-
-    } catch (writeErr) {
-
-        console.warn(
-            'Could not save page source:',
-            writeErr
-        )
-    }
-
-} catch (srcErr) {
-
-    console.error(
-        'Could not get page source:',
-        srcErr
-    )
 }
-
-}
-
-// ═══════════════════════════════════════════════
-// SELECTORS
-// ═══════════════════════════════════════════════
 
 const selectors = {
 
-adhocButton: {
-    android:
-        AndroidLocatorBuilder.xpath(
-            '//android.widget.TextView[@text="Adhoc"]'
-        ),
+    adhocButton: locator(
 
-    ios:
-        iOSLocatorBuilder.xpath(
-            '//XCUIElementTypeStaticText[@name="Adhoc"]'
-        ),
-} as TestBotElement,
+        '//android.widget.TextView[@text="Adhoc"]',
 
-expandAllSectionsButton: {
-    android:
-        AndroidLocatorBuilder.xpath(
-            '//android.widget.Button[@text="\uE0A4"]'
-        ),
+        '//XCUIElementTypeStaticText[@name="Adhoc"]'
 
-    ios:
-        iOSLocatorBuilder.xpath(
-            '//XCUIElementTypeButton[@name=""]'
-        ),
-} as TestBotElement,
+    ),
 
-temperatureText: {
-    android:
-        AndroidLocatorBuilder.xpath(
-            '//android.widget.TextView[@text="Temperature"]'
-        ),
+    expandAllSectionsButton: locator(
 
-    ios:
-        iOSLocatorBuilder.xpath(
-            '//XCUIElementTypeStaticText[@name="Temperature"]'
-        ),
-} as TestBotElement,
+        '//android.widget.Button[@text="\uE0A4"]',
 
-// PLATFORM-SAFE TEMPERATURE SELECTION CONTROL
+        '//XCUIElementTypeButton[@name=""]'
 
-temperatureSelectionButton: {
-    android:
-        AndroidLocatorBuilder.xpath(
-            '//androidx.recyclerview.widget.RecyclerView/android.view.ViewGroup[4]/android.view.ViewGroup/android.view.ViewGroup[3]/android.view.ViewGroup/android.widget.ImageView'
-        ),
+    ),
 
-    ios:
-        iOSLocatorBuilder.xpath(
-            '//XCUIElementTypeImage'
-        ),
-} as TestBotElement,
+    temperatureText: locator(
 
-temperatureInputField: {
-    android:
-        AndroidLocatorBuilder.xpath(
-            '//android.widget.EditText'
-        ),
+        '//android.widget.TextView[@text="Temperature"]',
 
-    ios:
-        iOSLocatorBuilder.xpath(
-            '//XCUIElementTypeTextField'
-        ),
-} as TestBotElement,
+        '//XCUIElementTypeStaticText[@name="Temperature"]'
 
-nextButton: {
-    android:
-        AndroidLocatorBuilder.xpath(
-            '//android.widget.Button[@text="Next"]'
-        ),
+    ),
 
-    ios:
-        iOSLocatorBuilder.xpath(
-            '//XCUIElementTypeButton[@name="Next"]'
-        ),
-} as TestBotElement,
+    temperatureSelectionButton: locator(
 
-validationErrorMessage: {
-    android:
-        AndroidLocatorBuilder.xpath(
-            '//android.widget.TextView[' +
-            'contains(@text,"invalid") or ' +
-            'contains(@text,"Invalid") or ' +
-            'contains(@text,"must be") or ' +
-            'contains(@text,"between") or ' +
-            'contains(@text,"30") or ' +
-            'contains(@text,"50")' +
-            ']'
-        ),
+        '//android.widget.TextView[@text="Temperature"]/ancestor::android.view.ViewGroup[@clickable="true"][1]',
 
-    ios:
-        iOSLocatorBuilder.xpath(
-            '//XCUIElementTypeStaticText[' +
-            'contains(@name,"invalid") or ' +
-            'contains(@name,"Invalid") or ' +
-            'contains(@name,"must be") or ' +
-            'contains(@name,"between") or ' +
-            'contains(@name,"30") or ' +
-            'contains(@name,"50")' +
-            ']'
-        ),
-} as TestBotElement,
+        '//XCUIElementTypeStaticText[@name="Temperature"]/ancestor::XCUIElementTypeOther[1]'
 
-createRecordsButton: {
-    android:
-        AndroidLocatorBuilder.xpath(
-            '//android.widget.Button[@text="Create Records"]'
-        ),
+    ),
 
-    ios:
-        iOSLocatorBuilder.xpath(
-            '//XCUIElementTypeButton[@name="Create Records"]'
-        ),
-} as TestBotElement,
+    suppliedTemperatureImage: locator(
 
-careNoteBottomCloseButton: {
-    android:
-        AndroidLocatorBuilder.xpath(
-            '//android.widget.Button[@text="Close"]'
-        ),
+        '//androidx.recyclerview.widget.RecyclerView/android.view.ViewGroup[4]/android.view.ViewGroup/android.view.ViewGroup[3]/android.view.ViewGroup/android.widget.ImageView',
 
-    ios:
-        iOSLocatorBuilder.xpath(
-            '//XCUIElementTypeButton[@name="Close"]'
-        ),
-} as TestBotElement,
+        '//XCUIElementTypeStaticText[@name="Temperature"]/preceding-sibling::XCUIElementTypeImage[1]'
 
-earlierTab: {
-    android:
-        AndroidLocatorBuilder.xpath(
-            '//android.view.ViewGroup[@resource-id="com.personcentredsoftware.care.delivery:id/ProfilePage"]' +
-            '/android.view.ViewGroup' +
-            '/android.view.ViewGroup[2]' +
-            '/android.view.ViewGroup' +
-            '/android.view.ViewGroup' +
-            '/android.view.ViewGroup' +
-            '/android.view.ViewGroup[1]' +
-            '/android.view.ViewGroup' +
-            '/android.widget.Button'
-        ),
+    ),
 
-    ios:
-        iOSLocatorBuilder.xpath(
-            '//XCUIElementTypeButton[@name="Earlier"]'
-        ),
-} as TestBotElement,
+    nextButton: locator(
 
-earlierRightCloseIcon: {
-    android:
-        AndroidLocatorBuilder.xpath(
-            '(//android.widget.Button[@text=""])[1] | ' +
-            '//android.widget.Button[@content-desc="Close"] | ' +
-            '//android.widget.ImageView[@content-desc="Close"]'
-        ),
+        '//android.widget.Button[@text="Next"]',
 
-    ios:
-        iOSLocatorBuilder.xpath(
-            '(//XCUIElementTypeButton[@name=""])[1] | ' +
-            '//XCUIElementTypeButton[@name="Close"]'
-        ),
-} as TestBotElement,
+        '//XCUIElementTypeButton[@name="Next"]'
 
-myCommunitiesTab: {
-    android:
-        AndroidLocatorBuilder.xpath(
-            '//*[@text="My Communities"]'
-        ),
+    ),
 
-    ios:
-        iOSLocatorBuilder.xpath(
-            '//*[@name="My Communities"]'
-        ),
-} as TestBotElement,
+    temperatureInput: locator(
+
+        '//android.widget.EditText',
+
+        '//XCUIElementTypeTextField'
+
+    ),
+
+    validationError: locator(
+
+        '//android.widget.TextView[contains(@text,"Temperature should be within the specified range")]',
+
+        '//XCUIElementTypeStaticText[contains(@name,"Temperature should be within the specified range")]'
+
+    ),
+
+    lowBaselineGuidance: locator(
+
+        '//android.widget.TextView[contains(@text,"Temperature is lower than the specified range")]',
+
+        '//XCUIElementTypeStaticText[contains(@name,"Temperature is lower than the specified range")]'
+
+    ),
+
+    highBaselineGuidance: locator(
+
+        '//android.widget.TextView[contains(@text,"Temperature is higher than the specified range")]',
+
+        '//XCUIElementTypeStaticText[contains(@name,"Temperature is higher than the specified range")]'
+
+    ),
+
+    tenMinuteDuration: locator(
+
+        '//android.view.ViewGroup[@resource-id="com.personcentredsoftware.care.delivery:id/DurationField"]//android.widget.TextView[@text="10 mins"]',
+
+        '//XCUIElementTypeOther[@name="DurationField"]//XCUIElementTypeStaticText[@name="10 mins"]'
+
+    ),
+
+    confirmButton: locator(
+
+        '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/ConfirmButton"]',
+
+        '//XCUIElementTypeButton[@name="ConfirmButton"]'
+
+    ),
+
+    createRecordsButton: locator(
+
+        '//android.widget.Button[@text="Create Records"]',
+
+        '//XCUIElementTypeButton[@name="Create Records"]'
+
+    ),
+
+    closeButton: locator(
+
+        '//android.widget.Button[@text="Close"]',
+
+        '//XCUIElementTypeButton[@name="Close"]'
+
+    ),
+
+    earlierTab: locator(
+
+        '//*[@text="Earlier"]',
+
+        '//*[@name="Earlier"]'
+
+    ),
+
+    earlierCloseButton: locator(
+
+        '(//android.widget.Button[@text=""])[1] | //android.widget.Button[@content-desc="Close"]',
+
+        '(//XCUIElementTypeButton[@name=""])[1] | //XCUIElementTypeButton[@name="Close"]'
+
+    ),
+
+    myCommunitiesTab: locator(
+
+        '//*[@text="My Communities"]',
+
+        '//*[@name="My Communities"]'
+
+    ),
 
 }
 
-// ═══════════════════════════════════════════════
-// SELECT RESIDENT
-// ═══════════════════════════════════════════════
+async function dumpPageSourceOnFailure(step: string): Promise<void> {
 
-async function selectResident(): Promise<string> {
-
-console.log(
-    '▶ Searching for visible care recipients...'
-)
-
-const visibleResidents: string[] = []
-
-for (const name of CARE_RECIPIENTS) {
-
-    const visible =
-        await testBot
-            .isVisible(
-                residentLocator(name)
-            )
-            .catch(() => false)
-
-    if (visible) {
-        visibleResidents.push(name)
-    }
-}
-
-if (visibleResidents.length > 0) {
-
-    const selectedName =
-        visibleResidents[0]
-
-    console.log(
-        `▶ Selected resident: "${selectedName}"`
-    )
-
-    await testBot.click(
-        residentLocator(selectedName)
-    )
-
-    await driver.pause(2000)
-
-    return selectedName
-}
-
-console.log(
-    '▶ No resident immediately visible — scrolling'
-)
-
-for (
-    const candidateName
-    of CARE_RECIPIENTS
-) {
+    console.error(`Failure at ${step}`)
 
     try {
 
-        const element =
-            await $(
-                'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
-                `.scrollIntoView(new UiSelector().textMatches("^${candidateName}$"))`
-            )
+        console.log(await driver.getPageSource())
 
-        if (
-            await element.isExisting()
-        ) {
+    } catch (error) {
 
-            await element.click()
+        console.error('Could not get page source', error)
 
-            console.log(
-                `▶ Selected resident after scrolling: "${candidateName}"`
-            )
+    }
 
-            await driver.pause(2000)
+}
 
-            return candidateName
+async function isVisible(element: TestBotElement): Promise<boolean> {
+
+    return testBot.isVisible(element).catch(() => false)
+
+}
+
+async function selectResident(name: string): Promise<void> {
+
+    if (await isVisible(residentLocator(name))) {
+
+        await testBot.click(residentLocator(name))
+
+        return
+
+    }
+
+    if ((process.env.PLATFORM || 'android').toLowerCase() === 'android') {
+
+        const resident = await $(
+
+            'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
+
+            `.scrollIntoView(new UiSelector().text("${name}"))`
+
+        )
+
+        await resident.waitForDisplayed({ timeout: 20000 })
+
+        await resident.click()
+
+        return
+
+    }
+
+    throw new Error(`Resident "${name}" is not visible`)
+
+}
+
+async function openTemperatureCareNote(residentName: string): Promise<void> {
+
+    await testBot.waitUntilVisible(selectors.myCommunitiesTab, 120000)
+
+    await selectResident(residentName)
+
+    console.log(`Selected resident: ${residentName}`)
+
+    await testBot.waitUntilVisible(selectors.adhocButton, 10000)
+
+    await testBot.click(selectors.adhocButton)
+
+    let temperatureVisible = await isVisible(selectors.temperatureText)
+
+    if (!temperatureVisible && await isVisible(selectors.expandAllSectionsButton)) {
+
+        await testBot.click(selectors.expandAllSectionsButton)
+
+        await driver.pause(500)
+
+        temperatureVisible = await isVisible(selectors.temperatureText)
+
+    }
+
+    if (!temperatureVisible) {
+
+        const temperature = await $(
+
+            'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
+
+            '.scrollIntoView(new UiSelector().text("Temperature"))'
+
+        )
+
+        await temperature.waitForDisplayed({ timeout: 10000 })
+
+    }
+
+    await selectTemperatureTile()
+
+    await testBot.waitUntilVisible(selectors.nextButton, 10000)
+
+    await testBot.click(selectors.nextButton)
+
+    await testBot.waitUntilVisible(selectors.temperatureInput, 10000)
+
+}
+
+async function tapElementCenter(element: any): Promise<void> {
+
+    const location = await element.getLocation()
+
+    const size = await element.getSize()
+
+    const x = Math.round(location.x + size.width / 2)
+
+    const y = Math.round(location.y + size.height / 2)
+
+    await driver.performActions([{
+
+        type: 'pointer',
+
+        id: 'temperature-tap',
+
+        parameters: { pointerType: 'touch' },
+
+        actions: [
+
+            { type: 'pointerMove', duration: 0, x, y },
+
+            { type: 'pointerDown', button: 0 },
+
+            { type: 'pause', duration: 100 },
+
+            { type: 'pointerUp', button: 0 },
+
+        ],
+
+    }])
+
+}
+
+async function selectTemperatureTile(): Promise<void> {
+
+    const temperatureTextXpath = await (testBot as any)
+
+        .getLocatorTextForElement(selectors.temperatureText)
+
+    const temperatureText = await $(temperatureTextXpath)
+
+    await temperatureText.waitForDisplayed({ timeout: 10000 })
+
+    await tapElementCenter(temperatureText)
+
+    await driver.pause(1000)
+
+    if (!(await isVisible(selectors.nextButton))) {
+
+        const suppliedXpath = await (testBot as any)
+
+            .getLocatorTextForElement(selectors.suppliedTemperatureImage)
+
+        const suppliedImage = await $(suppliedXpath)
+
+        if (await suppliedImage.isDisplayed().catch(() => false)) {
+
+            await tapElementCenter(suppliedImage)
+
+            await driver.pause(1000)
+
         }
 
-    } catch (err) {
-
-        console.warn(
-            `"${candidateName}" not found`
-        )
-    }
-}
-
-await dumpPageSourceOnFailure(
-    'selectResident'
-)
-
-throw new Error(
-    'No care recipient could be selected'
-)
-
-}
-
-// ═══════════════════════════════════════════════
-// ENTER TEMPERATURE VALUE
-// ═══════════════════════════════════════════════
-
-async function enterValue(
-field: TestBotElement,
-value: string
-): Promise<void> {
-
-console.log(
-    `▶ Entering temperature value: ${value}`
-)
-
-await testBot.waitUntilVisible(
-    field,
-    10000
-)
-
-const locator =
-    await (
-        testBot as any
-    ).getLocatorTextForElement(field)
-
-const inputElement =
-    await $(locator)
-
-await inputElement.waitForDisplayed({
-    timeout: 10000,
-})
-
-await inputElement.click()
-
-await driver.pause(300)
-
-try {
-
-    await inputElement.clearValue()
-
-} catch (clearErr) {
-
-    console.warn(
-        `Could not clear temperature field before entering ${value}:`,
-        clearErr
-    )
-}
-
-await inputElement.setValue(value)
-
-await driver.pause(700)
-
-try {
-
-    await driver.hideKeyboard()
-
-    await driver.pause(400)
-
-} catch (err) {
-
-    console.log(
-        'Keyboard already hidden'
-    )
-}
-
-console.log(
-    `✓ Temperature value entered: ${value}`
-)
-
-}
-
-// ═══════════════════════════════════════════════
-// ENTER RAW FIELD VALUE
-// ═══════════════════════════════════════════════
-
-async function enterRawFieldValue(
-field: any,
-value: string
-): Promise<void> {
-
-await field.waitForDisplayed({
-    timeout: 10000,
-})
-
-await field.click()
-
-await driver.pause(300)
-
-try {
-
-    await field.clearValue()
-
-} catch (clearErr) {
-
-    console.warn(
-        'Could not clear raw field:',
-        clearErr
-    )
-}
-
-await field.setValue(value)
-
-await driver.pause(600)
-
-try {
-
-    await driver.hideKeyboard()
-
-    await driver.pause(500)
-
-} catch (err) {
-
-    console.log(
-        'Keyboard already hidden'
-    )
-}
-
-}
-
-// ═══════════════════════════════════════════════
-// CHECK VALIDATION
-// ═══════════════════════════════════════════════
-
-async function isValidationVisible():
-Promise<boolean> {
-
-return await testBot
-    .isVisible(
-        selectors.validationErrorMessage
-    )
-    .catch(() => false)
-
-}
-
-// ═══════════════════════════════════════════════
-// ASSERT BVA RESULT
-// ═══════════════════════════════════════════════
-
-async function assertBoundaryResult(
-fieldName: string,
-testCase: TemperatureBoundaryCase,
-validationVisible: boolean
-): Promise<void> {
-
-if (testCase.expectedValid) {
-
-    if (validationVisible) {
-
-        throw new Error(
-            `BVA FAILED: ${fieldName} value "${testCase.value}" ` +
-            `(${testCase.description}) should be VALID ` +
-            `but validation was displayed`
-        )
     }
 
-    console.log(
-        `✓ PASS: ${fieldName} → ${testCase.value} accepted`
-    )
+    if (!(await isVisible(selectors.nextButton))) {
 
-    return
-}
+        throw new Error('Temperature tile was tapped but Next did not appear')
 
-if (!validationVisible) {
-
-    throw new Error(
-        `BVA FAILED: ${fieldName} value "${testCase.value}" ` +
-        `(${testCase.description}) should be INVALID ` +
-        `but validation was NOT displayed`
-    )
-}
-
-console.log(
-    `✓ PASS: ${fieldName} → ${testCase.value} correctly rejected`
-)
+    }
 
 }
 
-// ═══════════════════════════════════════════════
-// TEMPERATURE BVA
-// ═══════════════════════════════════════════════
+async function setTemperature(value: string): Promise<void> {
 
-async function runTemperatureBoundaryValueAnalysis():
-Promise<void> {
+    const xpath = await (testBot as any)
 
-console.log(
-    '════════════════════════════════════'
-)
+        .getLocatorTextForElement(selectors.temperatureInput)
 
-console.log(
-    '▶ STARTING TEMPERATURE BOUNDARY VALUE ANALYSIS'
-)
+    const input = await $(xpath)
 
-console.log(
-    `▶ Accepted range: ${TEMPERATURE_MIN} - ${TEMPERATURE_MAX}`
-)
+    await input.waitForDisplayed({ timeout: 10000 })
 
-console.log(
-    '════════════════════════════════════'
-)
+    await input.click()
 
-await testBot.waitUntilVisible(
-    selectors.temperatureInputField,
-    10000
-)
+    await input.clearValue()
 
-for (
-    const testCase
-    of TEMPERATURE_BOUNDARY_CASES
-) {
+    await input.setValue(value)
 
-    console.log(
-        '────────────────────────────────────'
-    )
+    try {
 
-    console.log(
-        `▶ Testing Temperature: ${testCase.value}`
-    )
+        await driver.hideKeyboard()
 
-    console.log(
-        `▶ ${testCase.description}`
-    )
+    } catch {
 
-    await enterValue(
-        selectors.temperatureInputField,
-        testCase.value
-    )
+        // The keyboard may already be closed on cloud devices.
 
-    await driver.pause(800)
-
-    const validationVisible =
-        await isValidationVisible()
-
-    await assertBoundaryResult(
-        'Temperature',
-        testCase,
-        validationVisible
-    )
-
-    console.log(
-        `✓ Completed Temperature test: ${testCase.value}`
-    )
-
-    await driver.pause(500)
-}
-
-console.log(
-    '────────────────────────────────────'
-)
-
-console.log(
-    `▶ Setting final valid Temperature: ${FINAL_VALID_TEMPERATURE}`
-)
-
-await enterValue(
-    selectors.temperatureInputField,
-    FINAL_VALID_TEMPERATURE
-)
-
-await driver.pause(800)
-
-const finalValidationVisible =
-    await isValidationVisible()
-
-if (finalValidationVisible) {
-
-    throw new Error(
-        `Final Temperature value ${FINAL_VALID_TEMPERATURE} ` +
-        `is showing validation`
-    )
-}
-
-console.log(
-    `✓ Temperature remains selected with value ${FINAL_VALID_TEMPERATURE}`
-)
-
-console.log(
-    '✓ Temperature BVA completed successfully'
-)
-
-console.log(
-    '════════════════════════════════════'
-)
-
-}
-
-// ═══════════════════════════════════════════════
-// GET FIELDS AFTER NEXT
-// ═══════════════════════════════════════════════
-
-async function getFieldsAfterNext(): Promise<any[]> {
-
-const fields =
-    await $$(
-        '//android.widget.EditText'
-    )
-
-console.log(
-    `▶ Found ${fields.length} EditText fields after Next`
-)
-
-if (
-    fields.length < 2
-) {
-
-    throw new Error(
-        `Expected at least two fields after Next but found ${fields.length}`
-    )
-}
-
-return fields
-
-}
-
-// ═══════════════════════════════════════════════
-// RESET RAW FIELD
-// ═══════════════════════════════════════════════
-
-async function resetRawFieldToValidValue(
-field: any,
-fieldName: string
-): Promise<void> {
-
-console.log(
-    `▶ Resetting ${fieldName} to valid value ${FINAL_VALID_TEMPERATURE}`
-)
-
-await enterRawFieldValue(
-    field,
-    FINAL_VALID_TEMPERATURE
-)
-
-await driver.pause(500)
-
-const validationVisible =
-    await isValidationVisible()
-
-if (validationVisible) {
-
-    throw new Error(
-        `Unable to reset ${fieldName}. ` +
-        `Valid value ${FINAL_VALID_TEMPERATURE} still shows validation.`
-    )
-}
-
-console.log(
-    `✓ ${fieldName} reset successfully`
-)
-
-}
-
-// ═══════════════════════════════════════════════
-// RUN BVA AGAINST RAW FIELD
-// ═══════════════════════════════════════════════
-
-async function runRawFieldBVA(
-field: any,
-fieldName: string
-): Promise<void> {
-
-console.log(
-    '────────────────────────────────────'
-)
-
-console.log(
-    `▶ STARTING BVA FOR ${fieldName}`
-)
-
-console.log(
-    `▶ Expected range: ${TEMPERATURE_MIN} - ${TEMPERATURE_MAX}`
-)
-
-console.log(
-    '────────────────────────────────────'
-)
-
-for (
-    const testCase
-    of TEMPERATURE_BOUNDARY_CASES
-) {
-
-    console.log(
-        `▶ ${fieldName} → Testing ${testCase.value}`
-    )
-
-    console.log(
-        `▶ ${testCase.description}`
-    )
-
-    await resetRawFieldToValidValue(
-        field,
-        fieldName
-    )
-
-    await enterRawFieldValue(
-        field,
-        testCase.value
-    )
+    }
 
     await driver.pause(700)
 
-    const validationVisible =
-        await isValidationVisible()
-
-    await assertBoundaryResult(
-        fieldName,
-        testCase,
-        validationVisible
-    )
-
-    await driver.pause(500)
 }
 
-await resetRawFieldToValidValue(
-    field,
-    fieldName
-)
+async function clearTemperature(): Promise<void> {
 
-console.log(
-    `✓ ${fieldName} BVA PASSED`
-)
+    const xpath = await (testBot as any)
 
-}
+        .getLocatorTextForElement(selectors.temperatureInput)
 
-// ═══════════════════════════════════════════════
-// ADDITIONAL FIELDS BVA
-// ═══════════════════════════════════════════════
+    const input = await $(xpath)
 
-async function runAdditionalFieldsBVA():
-Promise<void> {
+    await input.waitForDisplayed({ timeout: 10000 })
 
-console.log(
-    '════════════════════════════════════'
-)
+    await input.click()
 
-console.log(
-    '▶ STARTING BVA FOR ADDITIONAL FIELDS'
-)
-
-console.log(
-    `▶ Expected range: ${TEMPERATURE_MIN} - ${TEMPERATURE_MAX}`
-)
-
-console.log(
-    '════════════════════════════════════'
-)
-
-const fields =
-    await getFieldsAfterNext()
-
-const firstField =
-    fields[0]
-
-const secondField =
-    fields[1]
-
-await runRawFieldBVA(
-    firstField,
-    'Field 1 after Next'
-)
-
-await runRawFieldBVA(
-    secondField,
-    'Field 2 after Next'
-)
-
-await enterRawFieldValue(
-    firstField,
-    FINAL_VALID_TEMPERATURE
-)
-
-await driver.pause(300)
-
-await enterRawFieldValue(
-    secondField,
-    FINAL_VALID_TEMPERATURE
-)
-
-await driver.pause(500)
-
-const finalValidation =
-    await isValidationVisible()
-
-if (finalValidation) {
-
-    throw new Error(
-        'Additional fields show validation even with final valid value 40'
-    )
-}
-
-console.log(
-    '✓ Final valid value 40 accepted in both additional fields'
-)
-
-console.log(
-    '════════════════════════════════════'
-)
-
-console.log(
-    '✓ ALL ADDITIONAL FIELD BVA TESTS PASSED'
-)
-
-console.log(
-    '════════════════════════════════════'
-)
-
-}
-
-// ═══════════════════════════════════════════════
-// NAVIGATE TO TEMPERATURE
-// ═══════════════════════════════════════════════
-
-async function navigateToTemperature():
-Promise<string> {
-
-try {
-
-    const residentName =
-        await selectResident()
-
-    await testBot.waitUntilVisible(
-        selectors.adhocButton,
-        5000
-    )
-
-    await testBot.click(
-        selectors.adhocButton
-    )
-
-    console.log(
-        '✓ Clicked Adhoc'
-    )
-
-    await driver.pause(2000)
+    await input.clearValue()
 
     try {
 
-        await testBot.waitUntilVisible(
-            selectors.expandAllSectionsButton,
-            5000
-        )
+        await driver.hideKeyboard()
 
-        await testBot.click(
-            selectors.expandAllSectionsButton
-        )
+    } catch {
 
-        console.log(
-            '✓ Expanded all sections'
-        )
+        // The keyboard may already be closed on cloud devices.
 
-        await driver.pause(1500)
-
-    } catch (err) {
-
-        console.warn(
-            'Expand-all button unavailable — continuing'
-        )
     }
 
-    let temperatureVisible =
-        await testBot
-            .isVisible(
-                selectors.temperatureText
-            )
-            .catch(() => false)
+    await driver.pause(700)
 
-    if (!temperatureVisible) {
+    const value = (process.env.PLATFORM || 'android').toLowerCase() === 'android'
 
-        console.log(
-            '▶ Temperature not immediately visible — scrolling'
-        )
+        ? await input.getAttribute('text')
 
-        try {
+        : await input.getValue()
 
-            const temperatureElement =
-                await $(
-                    'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
-                    '.scrollIntoView(new UiSelector().text("Temperature"))'
-                )
+    if (value !== '') {
 
-            temperatureVisible =
-                await temperatureElement.isExisting()
+        throw new Error(`Temperature field was not blank. Current value: "${value}"`)
 
-        } catch (err) {
-
-            console.warn(
-                'Unable to scroll to Temperature'
-            )
-        }
     }
 
-    if (!temperatureVisible) {
+}
+
+async function expectClinicalValidation(expected: boolean): Promise<void> {
+
+    const displayed = await isVisible(selectors.validationError)
+
+    if (displayed !== expected) {
 
         throw new Error(
-            'Temperature option not found'
+
+            `Expected clinical validation to be ${expected ? 'displayed' : 'hidden'}`
+
         )
+
     }
 
-    console.log(
-        '▶ Selecting Temperature using platform-specific selection control'
-    )
+}
 
-    await testBot.waitUntilVisible(
-        selectors.temperatureSelectionButton,
-        10000
-    )
+async function expectGuidance(
 
-    const temperatureSelectionLocator =
-        await (
-            testBot as any
-        ).getLocatorTextForElement(
-            selectors.temperatureSelectionButton
-        )
+    expected: 'present' | 'none'
 
-    const temperatureSelectionElement =
-        await $(
-            temperatureSelectionLocator
-        )
+): Promise<void> {
 
-    await temperatureSelectionElement.waitForExist({
-        timeout: 10000,
-    })
+    const lowVisible = await isVisible(selectors.lowBaselineGuidance)
 
-    await temperatureSelectionElement.waitForDisplayed({
-        timeout: 10000,
-    })
+    const highVisible = await isVisible(selectors.highBaselineGuidance)
 
-    if (
-        typeof temperatureSelectionElement.waitForEnabled === 'function'
-    ) {
+    const guidanceVisible = lowVisible || highVisible
 
-        await temperatureSelectionElement.waitForEnabled({
-            timeout: 10000,
+    if (expected === 'present' && !guidanceVisible) {
+
+        throw new Error('Expected personalized Temperature guidance')
+
+    }
+
+    if (expected === 'none' && guidanceVisible) {
+
+        throw new Error('Personalized guidance was shown inside the baseline range')
+
+    }
+
+}
+
+async function runClinicalBoundaryAnalysis(): Promise<void> {
+
+    for (const value of [String(CLINICAL_MIN - 1), String(CLINICAL_MAX + 1)]) {
+
+        await setTemperature(value)
+
+        await expectClinicalValidation(true)
+
+    }
+
+}
+
+async function selectRequiredDuration(): Promise<void> {
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+
+        if (await isVisible(selectors.tenMinuteDuration)) {
+
+            await testBot.click(selectors.tenMinuteDuration)
+
+            return
+
+        }
+
+        const { width, height } = await driver.getWindowSize()
+
+        await driver.execute('mobile: swipeGesture', {
+
+            left: Math.floor(width * 0.2),
+
+            top: Math.floor(height * 0.6),
+
+            width: Math.floor(width * 0.6),
+
+            height: Math.floor(height * 0.3),
+
+            direction: 'up',
+
+            percent: 0.5,
+
         })
+
+        await driver.pause(750)
+
     }
+
+    throw new Error('Required 10 mins duration was not found')
+
+}
+
+async function completeCareNote(): Promise<void> {
+
+    await selectRequiredDuration()
+
+    const confirmXpath = await (testBot as any)
+
+        .getLocatorTextForElement(selectors.confirmButton)
+
+    const confirmButton = await $(confirmXpath)
+
+    await confirmButton.waitForDisplayed({ timeout: 10000 })
+
+    await confirmButton.waitForEnabled({ timeout: 10000 })
+
+    await confirmButton.click()
+
+    await testBot.waitUntilVisible(selectors.createRecordsButton, 10000)
+
+    await testBot.click(selectors.createRecordsButton)
+
+    await testBot.waitUntilVisible(selectors.closeButton, 10000)
+
+    await testBot.click(selectors.closeButton)
+
+    await testBot.waitUntilVisible(selectors.earlierTab, 10000)
+
+    await testBot.click(selectors.earlierTab)
+
+    await testBot.waitUntilVisible(selectors.earlierCloseButton, 10000)
+
+    await testBot.click(selectors.earlierCloseButton)
+
+    await testBot.waitUntilVisible(selectors.myCommunitiesTab, 30000)
+
+}
+
+async function runStep(step: string, action: () => Promise<void>): Promise<void> {
 
     try {
 
-        await temperatureSelectionElement.scrollIntoView()
+        await action()
 
-        await driver.pause(300)
+    } catch (error) {
 
-    } catch (scrollErr) {
+        await dumpPageSourceOnFailure(step)
 
-        console.warn(
-            'Could not scroll Temperature selection control into view'
-        )
+        throw error
+
     }
 
-    await temperatureSelectionElement.click()
-
-    console.log(
-        '✓ Temperature selection control clicked once'
-    )
-
-    await driver.pause(1200)
-
-    await testBot.waitUntilVisible(
-        selectors.temperatureInputField,
-        10000
-    )
-
-    console.log(
-        '✓ Temperature input field displayed'
-    )
-
-    return residentName
-
-} catch (err) {
-
-    await dumpPageSourceOnFailure(
-        'navigateToTemperature'
-    )
-
-    throw err
 }
 
-}
+describe('Resident Area Profile - Observations - Temperature', () => {
 
-// ═══════════════════════════════════════════════
-// CLICK NEXT
-// ═══════════════════════════════════════════════
+    it('Validates boundaries, re-enters a valid baseline value and completes the care note', async () => {
 
-async function clickNext():
-Promise<void> {
+        await runStep('baseline Temperature', async () => {
 
-console.log(
-    '▶ Preparing to continue from Temperature'
-)
+            await openTemperatureCareNote(BASELINE_RESIDENT)
 
-await testBot.waitUntilVisible(
-    selectors.temperatureInputField,
-    10000
-)
+            await runClinicalBoundaryAnalysis()
 
-console.log(
-    `✓ Temperature value ${FINAL_VALID_TEMPERATURE} is ready`
-)
+            await setTemperature(String(BASELINE_MIN - 1))
 
-try {
+            await expectClinicalValidation(false)
 
-    await driver.hideKeyboard()
+            await expectGuidance('present')
 
-    await driver.pause(500)
+            await setTemperature(String(BASELINE_MAX + 1))
 
-} catch (err) {
+            await expectClinicalValidation(false)
 
-    console.log(
-        'Keyboard already hidden'
-    )
-}
+            await expectGuidance('present')
 
-const nextLocator =
-    await (
-        testBot as any
-    ).getLocatorTextForElement(
-        selectors.nextButton
-    )
+            await setTemperature(VALID_TEMPERATURE)
 
-const nextElement =
-    await $(nextLocator)
+            await expectClinicalValidation(false)
 
-await nextElement.waitForExist({
-    timeout: 10000,
+            await expectGuidance('none')
+
+            await completeCareNote()
+
+        })
+
+    })
+
+    it('Leaves Temperature blank for a new non-baseline resident and completes the care note', async () => {
+
+        await runStep('blank non-baseline Temperature', async () => {
+
+            await openTemperatureCareNote(NON_BASELINE_RESIDENT)
+
+            await clearTemperature()
+
+            await expectClinicalValidation(false)
+
+            await completeCareNote()
+
+        })
+
+    })
+
+    it('Rejects zero and negative Temperature values, then completes with a valid value', async () => {
+
+        await runStep('zero and negative Temperature', async () => {
+
+            await openTemperatureCareNote(NON_BASELINE_RESIDENT)
+
+            for (const value of ['0', '-1']) {
+
+                await setTemperature(value)
+
+                await expectClinicalValidation(true)
+
+            }
+
+            await setTemperature(VALID_TEMPERATURE)
+
+            await expectClinicalValidation(false)
+
+            await completeCareNote()
+
+        })
+
+    })
+
 })
-
-await nextElement.waitForDisplayed({
-    timeout: 10000,
-})
-
-await nextElement.waitForEnabled({
-    timeout: 10000,
-})
-
-try {
-
-    await nextElement.scrollIntoView()
-
-    await driver.pause(300)
-
-} catch (scrollErr) {
-
-    console.warn(
-        'Could not scroll Next button into view:',
-        scrollErr
-    )
-}
-
-await nextElement.click()
-
-console.log(
-    '✓ Clicked Next'
-)
-
-await driver.pause(2000)
-
-}
-
-// ═══════════════════════════════════════════════
-// FINAL TEMPERATURE
-// ═══════════════════════════════════════════════
-
-async function enterFinalTemperature():
-Promise<void> {
-
-console.log(
-    `▶ Confirming final valid temperature: ${FINAL_VALID_TEMPERATURE}`
-)
-
-await testBot.waitUntilVisible(
-    selectors.temperatureInputField,
-    10000
-)
-
-const locator =
-    await (
-        testBot as any
-    ).getLocatorTextForElement(
-        selectors.temperatureInputField
-    )
-
-const inputElement =
-    await $(locator)
-
-await inputElement.waitForDisplayed({
-    timeout: 10000,
-})
-
-let currentValue = ''
-
-try {
-
-    currentValue =
-        await inputElement.getValue()
-
-} catch (err) {
-
-    console.warn(
-        'Could not read current temperature value'
-    )
-}
-
-console.log(
-    `▶ Current Temperature value: "${currentValue}"`
-)
-
-if (
-    currentValue !== FINAL_VALID_TEMPERATURE
-) {
-
-    await enterValue(
-        selectors.temperatureInputField,
-        FINAL_VALID_TEMPERATURE
-    )
-}
-
-await driver.pause(700)
-
-const validationVisible =
-    await isValidationVisible()
-
-if (validationVisible) {
-
-    throw new Error(
-        `Final valid temperature ${FINAL_VALID_TEMPERATURE} shows validation`
-    )
-}
-
-try {
-
-    await driver.hideKeyboard()
-
-    await driver.pause(500)
-
-} catch (err) {
-
-    console.log(
-        'Keyboard already hidden'
-    )
-}
-
-console.log(
-    `✓ Final Temperature ${FINAL_VALID_TEMPERATURE} accepted`
-)
-
-}
-
-// ═══════════════════════════════════════════════
-// COMPLETE CLOSE NAVIGATION
-// ═══════════════════════════════════════════════
-
-async function completeCloseNavigation():
-Promise<void> {
-
-console.log(
-    '════════ FINAL CLOSE FLOW ════════'
-)
-
-await testBot.waitUntilVisible(
-    selectors.careNoteBottomCloseButton,
-    10000
-)
-
-await testBot.click(
-    selectors.careNoteBottomCloseButton
-)
-
-console.log(
-    '✓ Clicked bottom Close button'
-)
-
-await driver.pause(2000)
-
-await testBot.waitUntilVisible(
-    selectors.earlierTab,
-    10000
-)
-
-await testBot.click(
-    selectors.earlierTab
-)
-
-console.log(
-    '✓ Clicked Earlier'
-)
-
-await driver.pause(2000)
-
-await testBot.waitUntilVisible(
-    selectors.earlierRightCloseIcon,
-    10000
-)
-
-await testBot.click(
-    selectors.earlierRightCloseIcon
-)
-
-console.log(
-    '✓ Clicked right-side Close icon'
-)
-
-await driver.pause(2000)
-
-await testBot.waitUntilVisible(
-    selectors.myCommunitiesTab,
-    30000
-)
-
-const visible =
-    await testBot
-        .isVisible(
-            selectors.myCommunitiesTab
-        )
-        .catch(() => false)
-
-if (!visible) {
-
-    throw new Error(
-        'My Communities was not displayed'
-    )
-}
-
-console.log(
-    '✓ My Communities displayed'
-)
-
-console.log(
-    '════════ CLOSE FLOW COMPLETE ════════'
-)
-
-}
-
-// ═══════════════════════════════════════════════
-// TEST SUITE
-// ═══════════════════════════════════════════════
-
-describe(
-'Resident Area Profile - Observations - Temperature - Boundary Value Analysis',
-() => {
-
-    let residentName = ''
-
-    it(
-        'Step 1 - Navigate to Temperature entry screen',
-        async function () {
-
-            try {
-
-                residentName =
-                    await navigateToTemperature()
-
-                console.log(
-                    `✓ Using resident: "${residentName}"`
-                )
-
-            } catch (err) {
-
-                await dumpPageSourceOnFailure(
-                    'Step 1 - Navigation'
-                )
-
-                throw err
-            }
-        }
-    )
-
-    it(
-        'Step 2 - Run Temperature Boundary Value Analysis 30-50',
-        async function () {
-
-            try {
-
-                await runTemperatureBoundaryValueAnalysis()
-
-            } catch (err) {
-
-                await dumpPageSourceOnFailure(
-                    'Step 2 - Temperature BVA'
-                )
-
-                throw err
-            }
-        }
-    )
-
-    it(
-        'Step 3 - Enter valid temperature and click Next',
-        async function () {
-
-            try {
-
-                await enterFinalTemperature()
-
-                await clickNext()
-
-            } catch (err) {
-
-                await dumpPageSourceOnFailure(
-                    'Step 3 - Temperature Next'
-                )
-
-                throw err
-            }
-        }
-    )
-
-    it(
-        'Step 4 - Run BVA for two fields after Temperature',
-        async function () {
-
-            try {
-
-                await runAdditionalFieldsBVA()
-
-            } catch (err) {
-
-                await dumpPageSourceOnFailure(
-                    'Step 4 - Additional Fields BVA'
-                )
-
-                throw err
-            }
-        }
-    )
-
-    it(
-        'Step 5 - Close and verify My Communities',
-        async function () {
-
-            try {
-
-                await completeCloseNavigation()
-
-                console.log(
-                    '✓ Temperature Observation BVA test completed successfully'
-                )
-
-            } catch (err) {
-
-                await dumpPageSourceOnFailure(
-                    'Step 5 - Close Navigation'
-                )
-
-                throw err
-            }
-        }
-    )
-}
-
-)
