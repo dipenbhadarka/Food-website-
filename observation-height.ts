@@ -1,0 +1,432 @@
+import { testBot } from '../../testbot'
+import { AndroidLocatorBuilder } from '../../TestBot/Locators/Android/AndroidLocatorBuilder'
+import { iOSLocatorBuilder } from '../../TestBot/Locators/iOS/iOSLocatorBuilder'
+import { TestBotElement } from '../../TestBot/TestBotElement'
+
+const NON_BASELINE_RESIDENT =
+    process.env.HEIGHT_NON_BASELINE_RESIDENT || 'Ah-Na Gravy'
+const BASELINE_RESIDENT =
+    process.env.HEIGHT_BASELINE_RESIDENT || 'Albie Armstrong'
+
+// Accepted range, per the provided locator: 50 - 300
+const CLINICAL_MIN = 50
+const CLINICAL_MAX = 300
+
+// ── NOT CONFIRMED — placeholder ──
+// No BaselineObservation-form screenshot was provided for
+// Height (unlike Respiration's confirmed 18-30 rpm range).
+// Using a provisional 100-200 range as a placeholder — please
+// confirm the real personalised baseline range for Height and
+// update these two values before relying on Steps 6-7 below.
+const BASELINE_MIN = 100
+const BASELINE_MAX = 200
+
+const VALID_HEIGHT = '170'
+
+function locator(androidXpath: string, iosXpath: string): TestBotElement {
+    return {
+        android: AndroidLocatorBuilder.xpath(androidXpath),
+        ios: iOSLocatorBuilder.xpath(iosXpath),
+    } as TestBotElement
+}
+
+function residentLocator(name: string): TestBotElement {
+    return locator(
+        `//android.widget.TextView[@text="${name}"]`,
+        `//XCUIElementTypeStaticText[@name="${name}"]`
+    )
+}
+
+const selectors = {
+    adhocButton: locator(
+        '//android.widget.TextView[@text="Adhoc"]',
+        '//XCUIElementTypeStaticText[@name="Adhoc"]'
+    ),
+
+    expandAllSectionsButton: locator(
+        '//android.widget.Button[@text="\uE0A4"]',
+        '//XCUIElementTypeButton[@name=""]'
+    ),
+
+    // ── CHANGED from Temperature/Respiration: label text,
+    // confirmed as "Record height" (not just "Height") ──
+    heightText: locator(
+        '//android.widget.TextView[@text="Record height"]',
+        '//XCUIElementTypeStaticText[@name="Record height"]'
+    ),
+
+    heightSelectionButton: locator(
+        '//android.widget.TextView[@text="Record height"]/ancestor::android.view.ViewGroup[@clickable="true"][1]',
+        '//XCUIElementTypeStaticText[@name="Record height"]/ancestor::XCUIElementTypeOther[1]'
+    ),
+
+    // NB: No dedicated icon-image locator was provided for
+    // Height (unlike Temperature's suppliedTemperatureImage).
+    // Kept as a preceding-sibling-image guess, same pattern as
+    // the other two flows, as a last-resort fallback only.
+    suppliedHeightImage: locator(
+        '//android.widget.TextView[@text="Record height"]/preceding-sibling::android.widget.ImageView[1]',
+        '//XCUIElementTypeStaticText[@name="Record height"]/preceding-sibling::XCUIElementTypeImage[1]'
+    ),
+
+    nextButton: locator(
+        '//android.widget.Button[@text="Next"]',
+        '//XCUIElementTypeButton[@name="Next"]'
+    ),
+
+    // ── CHANGED from Temperature/Respiration: your provided
+    // bare EditText (identical structurally — no change needed
+    // to the xpath itself, only the variable name) ──
+    heightInput: locator(
+        '//android.widget.EditText',
+        '//XCUIElementTypeTextField'
+    ),
+
+    // NB: no confirmed validation message text was provided for
+    // Height. Using the same generic "range" contains() match
+    // used as a placeholder in the Respiration flow — please
+    // confirm the real message text.
+    validationError: locator(
+        '//android.widget.TextView[contains(@text,"range")]',
+        '//XCUIElementTypeStaticText[contains(@name,"range")]'
+    ),
+
+    // NB: no confirmed baseline-guidance text was provided for
+    // Height (unlike Respiration's confirmed "Respiration rate
+    // is too low/high" strings from the BaselineObservation
+    // form). Using a best-guess "Height is too low/high" pattern
+    // — please confirm the real guidance text.
+    lowBaselineGuidance: locator(
+        '//android.widget.TextView[contains(@text,"Height is too low") or contains(@text,"Height is lower than")]',
+        '//XCUIElementTypeStaticText[contains(@name,"Height is too low") or contains(@name,"Height is lower than")]'
+    ),
+
+    highBaselineGuidance: locator(
+        '//android.widget.TextView[contains(@text,"Height is too high") or contains(@text,"Height is higher than")]',
+        '//XCUIElementTypeStaticText[contains(@name,"Height is too high") or contains(@name,"Height is higher than")]'
+    ),
+
+    tenMinuteDuration: locator(
+        '//android.view.ViewGroup[@resource-id="com.personcentredsoftware.care.delivery:id/DurationField"]//android.widget.TextView[@text="10 mins"]',
+        '//XCUIElementTypeOther[@name="DurationField"]//XCUIElementTypeStaticText[@name="10 mins"]'
+    ),
+
+    confirmButton: locator(
+        '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/ConfirmButton"]',
+        '//XCUIElementTypeButton[@name="ConfirmButton"]'
+    ),
+
+    createRecordsButton: locator(
+        '//android.widget.Button[@text="Create Records"]',
+        '//XCUIElementTypeButton[@name="Create Records"]'
+    ),
+
+    closeButton: locator(
+        '//android.widget.Button[@text="Close"]',
+        '//XCUIElementTypeButton[@name="Close"]'
+    ),
+
+    earlierTab: locator(
+        '//*[@text="Earlier"]',
+        '//*[@name="Earlier"]'
+    ),
+
+    earlierCloseButton: locator(
+        '(//android.widget.Button[@text=""])[1] | //android.widget.Button[@content-desc="Close"]',
+        '(//XCUIElementTypeButton[@name=""])[1] | //XCUIElementTypeButton[@name="Close"]'
+    ),
+
+    myCommunitiesTab: locator(
+        '//*[@text="My Communities"]',
+        '//*[@name="My Communities"]'
+    ),
+}
+
+async function dumpPageSourceOnFailure(step: string): Promise<void> {
+    console.error(`Failure at ${step}`)
+    try {
+        console.log(await driver.getPageSource())
+    } catch (error) {
+        console.error('Could not get page source', error)
+    }
+}
+
+async function isVisible(element: TestBotElement): Promise<boolean> {
+    return testBot.isVisible(element).catch(() => false)
+}
+
+async function selectResident(name: string): Promise<void> {
+    if (await isVisible(residentLocator(name))) {
+        await testBot.click(residentLocator(name))
+        return
+    }
+
+    if ((process.env.PLATFORM || 'android').toLowerCase() === 'android') {
+        const resident = await $(
+            'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
+            `.scrollIntoView(new UiSelector().text("${name}"))`
+        )
+        await resident.waitForDisplayed({ timeout: 20000 })
+        await resident.click()
+        return
+    }
+
+    throw new Error(`Resident "${name}" is not visible`)
+}
+
+// ── CHANGED from Temperature/Respiration: function name +
+// "Record height" text target, same structure ──
+async function openHeightCareNote(residentName: string): Promise<void> {
+    await testBot.waitUntilVisible(selectors.myCommunitiesTab, 120000)
+
+    await selectResident(residentName)
+    console.log(`Selected resident: ${residentName}`)
+
+    await testBot.waitUntilVisible(selectors.adhocButton, 10000)
+    await testBot.click(selectors.adhocButton)
+
+    let heightVisible = await isVisible(selectors.heightText)
+
+    if (!heightVisible && await isVisible(selectors.expandAllSectionsButton)) {
+        await testBot.click(selectors.expandAllSectionsButton)
+        await driver.pause(500)
+        heightVisible = await isVisible(selectors.heightText)
+    }
+
+    if (!heightVisible) {
+        const height = await $(
+            'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
+            '.scrollIntoView(new UiSelector().text("Record height"))'
+        )
+        await height.waitForDisplayed({ timeout: 10000 })
+    }
+
+    await selectHeightTile()
+
+    await testBot.waitUntilVisible(selectors.nextButton, 10000)
+    await testBot.click(selectors.nextButton)
+
+    await testBot.waitUntilVisible(selectors.heightInput, 10000)
+}
+
+async function tapElementCenter(element: any): Promise<void> {
+    const location = await element.getLocation()
+    const size = await element.getSize()
+    const x = Math.round(location.x + size.width / 2)
+    const y = Math.round(location.y + size.height / 2)
+
+    await driver.performActions([{
+        type: 'pointer',
+        id: 'height-tap',
+        parameters: { pointerType: 'touch' },
+        actions: [
+            { type: 'pointerMove', duration: 0, x, y },
+            { type: 'pointerDown', button: 0 },
+            { type: 'pause', duration: 100 },
+            { type: 'pointerUp', button: 0 },
+        ],
+    }])
+}
+
+async function selectHeightTile(): Promise<void> {
+    const heightTextXpath = await (testBot as any)
+        .getLocatorTextForElement(selectors.heightText)
+    const heightText = await $(heightTextXpath)
+    await heightText.waitForDisplayed({ timeout: 10000 })
+
+    await tapElementCenter(heightText)
+    await driver.pause(1000)
+
+    if (!(await isVisible(selectors.nextButton))) {
+        const suppliedXpath = await (testBot as any)
+            .getLocatorTextForElement(selectors.suppliedHeightImage)
+        const suppliedImage = await $(suppliedXpath)
+
+        if (await suppliedImage.isDisplayed().catch(() => false)) {
+            await tapElementCenter(suppliedImage)
+            await driver.pause(1000)
+        }
+    }
+
+    if (!(await isVisible(selectors.nextButton))) {
+        throw new Error('Height tile was tapped but Next did not appear')
+    }
+}
+
+async function setHeight(value: string): Promise<void> {
+    const xpath = await (testBot as any)
+        .getLocatorTextForElement(selectors.heightInput)
+    const input = await $(xpath)
+    await input.waitForDisplayed({ timeout: 10000 })
+    await input.click()
+    await input.clearValue()
+    await input.setValue(value)
+
+    try {
+        await driver.hideKeyboard()
+    } catch {
+        // The keyboard may already be closed on cloud devices.
+    }
+    await driver.pause(700)
+}
+
+async function clearHeight(): Promise<void> {
+    const xpath = await (testBot as any)
+        .getLocatorTextForElement(selectors.heightInput)
+    const input = await $(xpath)
+    await input.waitForDisplayed({ timeout: 10000 })
+    await input.click()
+    await input.clearValue()
+
+    try {
+        await driver.hideKeyboard()
+    } catch {
+        // The keyboard may already be closed on cloud devices.
+    }
+    await driver.pause(700)
+
+    const value = (process.env.PLATFORM || 'android').toLowerCase() === 'android'
+        ? await input.getAttribute('text')
+        : await input.getValue()
+
+    if (value !== '') {
+        throw new Error(`Height field was not blank. Current value: "${value}"`)
+    }
+}
+
+async function expectClinicalValidation(expected: boolean): Promise<void> {
+    const displayed = await isVisible(selectors.validationError)
+    if (displayed !== expected) {
+        throw new Error(
+            `Expected clinical validation to be ${expected ? 'displayed' : 'hidden'}`
+        )
+    }
+}
+
+async function expectGuidance(
+    expected: 'present' | 'none'
+): Promise<void> {
+    const lowVisible = await isVisible(selectors.lowBaselineGuidance)
+    const highVisible = await isVisible(selectors.highBaselineGuidance)
+    const guidanceVisible = lowVisible || highVisible
+
+    if (expected === 'present' && !guidanceVisible) {
+        throw new Error('Expected personalized Height guidance')
+    }
+    if (expected === 'none' && guidanceVisible) {
+        throw new Error('Personalized guidance was shown inside the baseline range')
+    }
+}
+
+async function runClinicalBoundaryAnalysis(): Promise<void> {
+    for (const value of [String(CLINICAL_MIN - 1), String(CLINICAL_MAX + 1)]) {
+        await setHeight(value)
+        await expectClinicalValidation(true)
+    }
+}
+
+async function selectRequiredDuration(): Promise<void> {
+    for (let attempt = 0; attempt < 5; attempt++) {
+        if (await isVisible(selectors.tenMinuteDuration)) {
+            await testBot.click(selectors.tenMinuteDuration)
+            return
+        }
+
+        const { width, height } = await driver.getWindowSize()
+        await driver.execute('mobile: swipeGesture', {
+            left: Math.floor(width * 0.2),
+            top: Math.floor(height * 0.6),
+            width: Math.floor(width * 0.6),
+            height: Math.floor(height * 0.3),
+            direction: 'up',
+            percent: 0.5,
+        })
+        await driver.pause(750)
+    }
+
+    throw new Error('Required 10 mins duration was not found')
+}
+
+async function completeCareNote(): Promise<void> {
+    await selectRequiredDuration()
+
+    const confirmXpath = await (testBot as any)
+        .getLocatorTextForElement(selectors.confirmButton)
+    const confirmButton = await $(confirmXpath)
+    await confirmButton.waitForDisplayed({ timeout: 10000 })
+    await confirmButton.waitForEnabled({ timeout: 10000 })
+    await confirmButton.click()
+
+    await testBot.waitUntilVisible(selectors.createRecordsButton, 10000)
+    await testBot.click(selectors.createRecordsButton)
+
+    await testBot.waitUntilVisible(selectors.closeButton, 10000)
+    await testBot.click(selectors.closeButton)
+
+    await testBot.waitUntilVisible(selectors.earlierTab, 10000)
+    await testBot.click(selectors.earlierTab)
+
+    await testBot.waitUntilVisible(selectors.earlierCloseButton, 10000)
+    await testBot.click(selectors.earlierCloseButton)
+
+    await testBot.waitUntilVisible(selectors.myCommunitiesTab, 30000)
+}
+
+async function runStep(step: string, action: () => Promise<void>): Promise<void> {
+    try {
+        await action()
+    } catch (error) {
+        await dumpPageSourceOnFailure(step)
+        throw error
+    }
+}
+
+describe('Resident Area Profile - Observations - Height', () => {
+
+    it('Validates boundaries, re-enters a valid baseline value and completes the care note', async () => {
+        await runStep('baseline Height', async () => {
+            await openHeightCareNote(BASELINE_RESIDENT)
+
+            await runClinicalBoundaryAnalysis()
+
+            await setHeight(String(BASELINE_MIN - 1))
+            await expectClinicalValidation(false)
+            await expectGuidance('present')
+
+            await setHeight(String(BASELINE_MAX + 1))
+            await expectClinicalValidation(false)
+            await expectGuidance('present')
+
+            await setHeight(VALID_HEIGHT)
+            await expectClinicalValidation(false)
+            await expectGuidance('none')
+
+            await completeCareNote()
+        })
+    })
+
+    it('Leaves Height blank for a new non-baseline resident and completes the care note', async () => {
+        await runStep('blank non-baseline Height', async () => {
+            await openHeightCareNote(NON_BASELINE_RESIDENT)
+            await clearHeight()
+            await expectClinicalValidation(false)
+            await completeCareNote()
+        })
+    })
+
+    it('Rejects zero and negative Height values, then completes with a valid value', async () => {
+        await runStep('zero and negative Height', async () => {
+            await openHeightCareNote(NON_BASELINE_RESIDENT)
+
+            for (const value of ['0', '-1']) {
+                await setHeight(value)
+                await expectClinicalValidation(true)
+            }
+
+            await setHeight(VALID_HEIGHT)
+            await expectClinicalValidation(false)
+            await completeCareNote()
+        })
+    })
+
+})
