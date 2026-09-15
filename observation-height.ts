@@ -176,7 +176,56 @@ async function selectResident(name: string): Promise<void> {
 
 // ── CHANGED from Temperature/Respiration: function name +
 // "Record height" text target, same structure ──
+// ─────────────────────────────────────────────
+// Recovery helper — if the app is not on the
+// Communities page (e.g. a previous test case
+// failed partway through and left the app stuck
+// on the Adhoc/Select Care screen, or any other
+// intermediate screen), this presses the device
+// back button repeatedly to unwind back to
+// Communities, rather than assuming the app is
+// always in a clean state at the start of every
+// test. Each `it()` calling openHeightCareNote()
+// is otherwise independent, but the ACTUAL app
+// only has one session — a previous test's
+// failure leaves real state behind that the next
+// test inherits unless this recovers it first.
+// ─────────────────────────────────────────────
+async function ensureOnCommunitiesPage(): Promise<void> {
+    const alreadyThere = await isVisible(selectors.myCommunitiesTab)
+    if (alreadyThere) {
+        return
+    }
+
+    console.warn('Not on Communities page at test start — attempting recovery via back button')
+
+    for (let attempt = 0; attempt < 8; attempt++) {
+        if (await isVisible(selectors.myCommunitiesTab)) {
+            console.log(`Recovered to Communities page after ${attempt} back-press(es)`)
+            return
+        }
+
+        try {
+            await driver.back()
+        } catch (backErr) {
+            console.warn('driver.back() failed:', backErr)
+        }
+        await driver.pause(1000)
+    }
+
+    if (!(await isVisible(selectors.myCommunitiesTab))) {
+        await dumpPageSourceOnFailure('ensureOnCommunitiesPage - recovery failed after 8 back-presses')
+        throw new Error(
+            'Could not recover to the Communities page even after 8 back-presses. ' +
+            'The app is stuck on an unexpected screen — likely because a PREVIOUS test case ' +
+            'in this suite failed partway through and left real app state behind. ' +
+            'Check the log for the FIRST failing test case in this run, not this one.'
+        )
+    }
+}
+
 async function openHeightCareNote(residentName: string): Promise<void> {
+    await ensureOnCommunitiesPage()
     await testBot.waitUntilVisible(selectors.myCommunitiesTab, 120000)
 
     await selectResident(residentName)
