@@ -205,8 +205,27 @@ async function openHeightCareNote(residentName: string): Promise<void> {
 
     await testBot.waitUntilVisible(selectors.nextButton, 10000)
     await testBot.click(selectors.nextButton)
+    console.log('Clicked Next (attempt 1)')
+    await driver.pause(1500)
 
-    await testBot.waitUntilVisible(selectors.heightInput, 10000)
+    let onHeightInputScreen = await isVisible(selectors.heightInput)
+
+    if (!onHeightInputScreen) {
+        console.log('Height input field not visible after Next — retrying click (attempt 2)')
+        const nextBtnRetry = await $(await (testBot as any).getLocatorTextForElement(selectors.nextButton))
+        if (await nextBtnRetry.isDisplayed().catch(() => false)) {
+            await nextBtnRetry.click()
+            await driver.pause(1500)
+            onHeightInputScreen = await isVisible(selectors.heightInput)
+        }
+    }
+
+    if (!onHeightInputScreen) {
+        await dumpPageSourceOnFailure('openHeightCareNote - Next click did not advance to height input')
+        throw new Error('Clicked Next after selecting Height, but the height input field never appeared, even after retrying')
+    }
+
+    console.log('Reached height input field')
 }
 
 async function tapElementCenter(element: any): Promise<void> {
@@ -235,21 +254,41 @@ async function selectHeightTile(): Promise<void> {
     await heightText.waitForDisplayed({ timeout: 10000 })
 
     await tapElementCenter(heightText)
-    await driver.pause(1000)
+    console.log('Tapped Height tile (attempt 1)')
+    await driver.pause(1500)
+
+    // Retry the SAME text-label tap once more before trying any
+    // fallback — a single tap not registering (Appium reports
+    // success but the app doesn't respond) has been an issue
+    // with other tiles/buttons elsewhere in this codebase, and
+    // is a more likely cause than needing a different element.
+    if (!(await isVisible(selectors.nextButton))) {
+        console.log('Next not visible after attempt 1 — retrying same tap (attempt 2)')
+        const heightTextRetry = await $(heightTextXpath)
+        if (await heightTextRetry.isDisplayed().catch(() => false)) {
+            await tapElementCenter(heightTextRetry)
+            await driver.pause(1500)
+        }
+    }
 
     if (!(await isVisible(selectors.nextButton))) {
+        console.log('Next still not visible — trying Height tile icon image as fallback')
         const suppliedXpath = await (testBot as any)
             .getLocatorTextForElement(selectors.suppliedHeightImage)
         const suppliedImage = await $(suppliedXpath)
 
         if (await suppliedImage.isDisplayed().catch(() => false)) {
             await tapElementCenter(suppliedImage)
-            await driver.pause(1000)
+            console.log('Tapped Height tile icon image fallback')
+            await driver.pause(1500)
+        } else {
+            console.log('Height tile icon image fallback not visible either')
         }
     }
 
     if (!(await isVisible(selectors.nextButton))) {
-        throw new Error('Height tile was tapped but Next did not appear')
+        await dumpPageSourceOnFailure('selectHeightTile - Next did not appear after 2 taps + fallback')
+        throw new Error('Height tile was tapped but Next did not appear, even after retrying and trying the fallback icon')
     }
 }
 
