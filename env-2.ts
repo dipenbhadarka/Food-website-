@@ -19,31 +19,23 @@ const ORGANISATION = 'Person Centred Software'
 const LOCATION = 'Kerr House'
 const USER = 'Akhila Nethi'
 
-// NB: This is the exact community text we must select on
-// the "What communities are you working in today?" screen.
-// There are FOUR similar options on that screen:
-//   "Kerr House"                              (parent group, not selectable)
-//   "Kerr House / Service Users"              <-- THIS is the one we want
-//   "Kerr House / South Wing - First Floor"   (do NOT select this)
-//   "Kerr House / Training"                   (do NOT select this)
-const TARGET_COMMUNITY = 'Kerr House / Service Users'
-
 // ─────────────────────────────────────────────
-// Selectors
+// Selectors — built directly from the provided
+// locator list, in the order given.
 // ─────────────────────────────────────────────
 const selectors = {
+    infoButton: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.view.ViewGroup[@resource-id="com.personcentredsoftware.care.delivery:id/InfoButton"]/android.view.ViewGroup/android.widget.Button'
+        ),
+        ios: iOSLocatorBuilder.id('InfoButton'),
+    } as TestBotElement,
+
     regionDropdown: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/EnvironmentPicker"]'
         ),
         ios: iOSLocatorBuilder.id('EnvironmentPicker'),
-    } as TestBotElement,
-
-    enrollDeviceButton: {
-        android: AndroidLocatorBuilder.xpath(
-            '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/LoginButton"]'
-        ),
-        ios: iOSLocatorBuilder.id('LoginButton'),
     } as TestBotElement,
 
     optionUnitedKingdom: {
@@ -53,6 +45,13 @@ const selectors = {
         ios: iOSLocatorBuilder.xpath(
             '//XCUIElementTypePickerWheel[@value="United Kingdom"]'
         ),
+    } as TestBotElement,
+
+    enrollDeviceButton: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/LoginButton"]'
+        ),
+        ios: iOSLocatorBuilder.id('LoginButton'),
     } as TestBotElement,
 
     usernameFieldLocal: {
@@ -104,11 +103,32 @@ const selectors = {
         ios: iOSLocatorBuilder.id('OrganisationPicker'),
     } as TestBotElement,
 
+    optionPersonCentredSoftware: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.TextView[@text="Person Centred Software"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeStaticText[@name="Person Centred Software"]'
+        ),
+    } as TestBotElement,
+
     locationDropdown: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/LocationPicker"]'
         ),
         ios: iOSLocatorBuilder.id('LocationPicker'),
+    } as TestBotElement,
+
+    // "Kerr House" appears twice in the picker list that opens
+    // for Location on the enrolment screen — this selects the
+    // SECOND match specifically, per the provided locator index [2].
+    optionKerrHouseEnrolment: {
+        android: AndroidLocatorBuilder.xpath(
+            '(//android.widget.TextView[@text="Kerr House"])[2]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '(//XCUIElementTypeStaticText[@name="Kerr House"])[2]'
+        ),
     } as TestBotElement,
 
     enrolButton: {
@@ -132,55 +152,16 @@ const selectors = {
         ios: iOSLocatorBuilder.id('LocationPicker'),
     } as TestBotElement,
 
-    // ── NEW: exact organisation option text, used on the
-    // enrolment screen's Organisation picker.
-    optionPersonCentredSoftware: {
-        android: AndroidLocatorBuilder.xpath(
-            '//android.widget.TextView[@text="Person Centred Software"]'
-        ),
-        ios: iOSLocatorBuilder.xpath(
-            '//XCUIElementTypeStaticText[@name="Person Centred Software"]'
-        ),
-    } as TestBotElement,
-
-    // ── NEW: "Kerr House" appears twice in the picker list
-    // that opens for Location on the enrolment screen — this
-    // selects the SECOND match specifically, per the provided
-    // locator index [2].
-    optionKerrHouseEnrolment: {
-        android: AndroidLocatorBuilder.xpath(
-            '(//android.widget.TextView[@text="Kerr House"])[2]'
-        ),
-        ios: iOSLocatorBuilder.xpath(
-            '(//XCUIElementTypeStaticText[@name="Kerr House"])[2]'
-        ),
-    } as TestBotElement,
-
-    // ── NEW: same underlying locator/index as
-    // optionKerrHouseEnrolment above, but named separately
-    // since it is used on the Welcome Back screen's own
-    // Location/site picker, a different screen context.
+    // Same underlying locator/index as optionKerrHouseEnrolment
+    // above, but named separately since it is used on the
+    // Welcome Back screen's own Location/site picker — a
+    // different screen context.
     optionKerrHouseWelcomeBack: {
         android: AndroidLocatorBuilder.xpath(
             '(//android.widget.TextView[@text="Kerr House"])[2]'
         ),
         ios: iOSLocatorBuilder.xpath(
             '(//XCUIElementTypeStaticText[@name="Kerr House"])[2]'
-        ),
-    } as TestBotElement,
-
-    // ── CHANGED per request: the Welcome Back screen's
-    // detection signal is now this specific username text,
-    // instead of relying only on the Location field. Confirms
-    // the app has landed on the "Welcome Back" / user-selection
-    // screen by checking for the "Akhila Nethi" username text
-    // directly.
-    welcomeBackUsername: {
-        android: AndroidLocatorBuilder.xpath(
-            '//android.widget.TextView[@text="Akhila Nethi"]'
-        ),
-        ios: iOSLocatorBuilder.xpath(
-            '//XCUIElementTypeStaticText[@name="Akhila Nethi"]'
         ),
     } as TestBotElement,
 
@@ -191,6 +172,18 @@ const selectors = {
         ios: iOSLocatorBuilder.id('UserPicker'),
     } as TestBotElement,
 
+    // Direct text match for the Welcome Back screen's user
+    // selection, and also used as an additional detection signal
+    // for Step 0.
+    welcomeBackUsername: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.TextView[@text="Akhila Nethi"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeStaticText[@name="Akhila Nethi"]'
+        ),
+    } as TestBotElement,
+
     signInButton: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/SignInButton"]'
@@ -198,40 +191,26 @@ const selectors = {
         ios: iOSLocatorBuilder.id('SignInButton'),
     } as TestBotElement,
 
-    // ── Communities screen — all four options present,
-    // each with an EXACT-match locator so they can never
-    // be confused with one another. ──
     kerrHouseServiceUsers: {
         android: AndroidLocatorBuilder.xpath(
-            `//android.widget.TextView[@text="${TARGET_COMMUNITY}"]`
+            '//android.widget.TextView[@text="Kerr House / Service Users"]'
         ),
         ios: iOSLocatorBuilder.xpath(
-            `//XCUIElementTypeStaticText[@name="${TARGET_COMMUNITY}"]`
+            '//XCUIElementTypeStaticText[@name="Kerr House / Service Users"]'
         ),
     } as TestBotElement,
 
     // The clickable row (parent ViewGroup) containing the
     // "Kerr House / Service Users" checkbox — required on
-    // BrowserStack where no community is pre-selected and
-    // the CheckBox itself does not toggle via a direct
-    // Appium click; the surrounding row must be tapped.
+    // BrowserStack where no community is pre-selected and the
+    // CheckBox itself does not toggle via a direct Appium click;
+    // the surrounding row must be tapped.
     kerrHouseServiceUsersRow: {
         android: AndroidLocatorBuilder.xpath(
-            `//android.widget.TextView[@text="${TARGET_COMMUNITY}"]/ancestor::android.view.ViewGroup[@clickable="true"][1]`
+            '//android.widget.TextView[@text="Kerr House / Service Users"]/ancestor::android.view.ViewGroup[@clickable="true"][1]'
         ),
         ios: iOSLocatorBuilder.xpath(
-            `//XCUIElementTypeStaticText[@name="${TARGET_COMMUNITY}"]`
-        ),
-    } as TestBotElement,
-
-    // Explicitly defined so we can positively confirm we
-    // are NOT on this option before/after selecting.
-    kerrHouseSouthWing: {
-        android: AndroidLocatorBuilder.xpath(
-            '//android.widget.TextView[@text="Kerr House / South Wing - First Floor"]'
-        ),
-        ios: iOSLocatorBuilder.xpath(
-            '//XCUIElementTypeStaticText[@name="Kerr House / South Wing - First Floor"]'
+            '//XCUIElementTypeStaticText[@name="Kerr House / Service Users"]'
         ),
     } as TestBotElement,
 
@@ -255,17 +234,6 @@ const selectors = {
 const usernameField: TestBotElement = isLocal
     ? selectors.usernameFieldLocal
     : selectors.usernameFieldBrowserStack
-
-function pickerOption(text: string): TestBotElement {
-    return {
-        android: AndroidLocatorBuilder.xpath(
-            `//android.widget.TextView[@resource-id="android:id/text1" and @text="${text}"]`
-        ),
-        ios: iOSLocatorBuilder.xpath(
-            `//XCUIElementTypePickerWheel[@value="${text}"]`
-        ),
-    } as TestBotElement
-}
 
 // ─────────────────────────────────────────────
 // Helper — submit username field
@@ -354,55 +322,19 @@ async function submitUsername(): Promise<void> {
 }
 
 // ─────────────────────────────────────────────
-// Helper — robust picker selection with scroll fallback
+// Helper — dump page source with a clear label,
+// tolerant of the session already being dead.
 // ─────────────────────────────────────────────
-async function selectPickerOptionRobust(value: string): Promise<void> {
-    const option = pickerOption(value)
-
-    try {
-        await testBot.waitUntilVisible(option, 5000)
-        await testBot.click(option)
-        console.log(`Selected "${value}" directly`)
-        return
-    } catch (err) {
-        console.warn(`Direct selection of "${value}" failed, trying scroll fallback`)
-    }
-
-    try {
-        const scrolled = await $(
-            'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
-            `.scrollIntoView(new UiSelector().text("${value}"))`
-        )
-        if (await scrolled.isExisting()) {
-            await scrolled.click()
-            console.log(`Selected "${value}" via UiScrollable scroll`)
-            return
-        }
-    } catch (err) {
-        console.warn(`UiScrollable fallback for "${value}" failed:`, err)
-    }
-
-    try {
-        const anyText = await $(`//*[@text="${value}"]`)
-        if (await anyText.isExisting()) {
-            await anyText.click()
-            console.log(`Selected "${value}" via generic text match`)
-            return
-        }
-    } catch (err) {
-        console.warn(`Generic text match for "${value}" failed:`, err)
-    }
-
-    console.error(`Could not select "${value}" with any method — dumping page source`)
+async function dumpPageSourceOnFailure(stepLabel: string): Promise<void> {
+    console.error(`Failure at ${stepLabel} — dumping page source`)
     try {
         const pageSource = await driver.getPageSource()
-        console.log(`─────────── PAGE SOURCE: PICKER "${value}" ───────────`)
+        console.log(`─────────── PAGE SOURCE: ${stepLabel} ───────────`)
         console.log(pageSource)
         console.log('─────────────────────────────────────────────')
     } catch (srcErr) {
         console.warn('getPageSource failed (session may be dead):', srcErr)
     }
-    throw new Error(`Could not select picker option "${value}"`)
 }
 
 // ─────────────────────────────────────────────
@@ -413,19 +345,17 @@ async function selectPickerOptionRobust(value: string): Promise<void> {
 // never rely on assumptions about a pre-checked state.
 // ─────────────────────────────────────────────
 async function ensureKerrHouseServiceUsersSelected(): Promise<void> {
-    const targetXpath = `//android.widget.TextView[@text="${TARGET_COMMUNITY}"]`
-
     await testBot.waitUntilVisible(selectors.kerrHouseServiceUsers, 20000)
-    console.log(`Confirmed "${TARGET_COMMUNITY}" is visible on the Communities screen`)
+    console.log('Confirmed "Kerr House / Service Users" is visible on the Communities screen')
 
     const startWorkXpath =
         '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/StartWorkButton"]'
     const startBtn = await $(startWorkXpath)
 
-    // If Start Work is already enabled, the target community
-    // is likely already selected by default (seen on local
-    // physical device) — do NOT tap it, since tapping would
-    // toggle it OFF and disable Start Work again.
+    // If Start Work is already enabled, the target community is
+    // likely already selected by default (seen on local physical
+    // device) — do NOT tap it, since tapping would toggle it OFF
+    // and disable Start Work again.
     const alreadyEnabled = await startBtn.isEnabled().catch(() => false)
     if (alreadyEnabled) {
         console.log('Start Work already enabled — assuming target community is pre-selected. Skipping tap.')
@@ -433,28 +363,20 @@ async function ensureKerrHouseServiceUsersSelected(): Promise<void> {
     }
 
     // Otherwise (BrowserStack, or any run where nothing is
-    // pre-selected), tap the row for "Kerr House / Service
-    // Users" specifically — never any other Kerr House option.
-    console.log(`Start Work is disabled — tapping "${TARGET_COMMUNITY}" row to select it`)
+    // pre-selected), tap the row for "Kerr House / Service Users"
+    // specifically — never any other Kerr House option.
+    console.log('Start Work is disabled — tapping "Kerr House / Service Users" row to select it')
     await testBot.click(selectors.kerrHouseServiceUsersRow)
     await driver.pause(3000)
 
     const nowEnabled = await startBtn.isEnabled().catch(() => false)
     if (!nowEnabled) {
-        console.error(`Start Work still disabled after tapping "${TARGET_COMMUNITY}" — dumping page source`)
-        try {
-            const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE: COMMUNITY SELECTION ───────────')
-            console.log(pageSource)
-            console.log('────────────────────────────────────────────────────')
-        } catch (srcErr) {
-            console.warn('getPageSource failed:', srcErr)
-        }
+        await dumpPageSourceOnFailure('ensureKerrHouseServiceUsersSelected - Start Work still disabled')
         throw new Error(
-            `Selecting "${TARGET_COMMUNITY}" did not enable Start Work — check the community list state`
+            'Selecting "Kerr House / Service Users" did not enable Start Work — check the community list state'
         )
     }
-    console.log(`Confirmed "${TARGET_COMMUNITY}" is selected — Start Work is now enabled`)
+    console.log('Confirmed "Kerr House / Service Users" is selected — Start Work is now enabled')
 }
 
 // ─────────────────────────────────────────────
@@ -471,23 +393,12 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         // NB: BrowserStack cloud devices provision a fresh app
         // install every session and are typically slower to
         // cold-start the app than a physical device that already
-        // has it warm/cached (network latency to BrowserStack's
-        // infrastructure, shared device pool overhead, the app
-        // upload/install step happening right before the test
-        // starts). The previous flat 30s timeout was tuned against
-        // local-device timing and was too short for BrowserStack,
-        // causing this step to throw "Could not detect Welcome or
-        // Welcome Back screen" before the app had even finished
-        // rendering its first real screen.
-        //
-        // NB #2: a real local-device run showed the Welcome Back
-        // screen's Sign In button present (disabled) but the
-        // Location/Username text not yet rendered even at the
-        // 30s mark — i.e. 30s was ALSO occasionally too tight
-        // locally, not just on BrowserStack. Widened to 60s for
-        // local as well, since the cost of waiting a little
-        // longer is far smaller than a false "screen not
-        // detected" failure.
+        // has it warm/cached. A local-device run also showed the
+        // Welcome Back screen's Sign In button (disabled) render
+        // before Location/Username text, and BrowserStack itself
+        // needs longer than a flat 30s in general — so timeouts
+        // are widened for both, and detection checks for the
+        // username text OR the location field.
         const startupTimeout = isLocal ? 60000 : 90000
         const pollInterval = 1000
         const deadline = Date.now() + startupTimeout
@@ -499,23 +410,6 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         while (Date.now() < deadline) {
             regionDropdownVisible = await testBot.isVisible(selectors.regionDropdown).catch(() => false)
 
-            // ── CHANGED per request: Welcome Back detection now
-            // checks for the "Akhila Nethi" username text
-            // directly, instead of (or in addition to) the
-            // Location field. Falls back to the Location field
-            // check too, so this remains robust if the username
-            // text isn't rendered yet but the screen is otherwise
-            // the Welcome Back / login screen.
-            //
-            // NB: signInButton was tried as a third, earlier
-            // detection signal, but a real run then failed at
-            // Step 10.2/10.3 with LocationPicker/UserPicker/
-            // "Akhila Nethi" all returning RESULT [] — meaning
-            // signInButton likely also matches some OTHER screen
-            // that is not actually the Welcome Back screen,
-            // causing a false-positive detection here and a
-            // cascade of failures downstream. Reverted to the
-            // two originally-confirmed signals only.
             welcomeBackVisible =
                 (await testBot.isVisible(selectors.welcomeBackUsername).catch(() => false)) ||
                 (await testBot.isVisible(selectors.locationPickerLogin).catch(() => false))
@@ -540,10 +434,7 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
             console.log('Detected Welcome Back screen (via "Akhila Nethi" username or Location field) — skipping enrolment steps and proceeding with login flow')
         } else {
             console.error(`Neither screen detected within ${startupTimeout}ms (${isLocal ? 'local' : 'BrowserStack'} mode) — dumping page source`)
-            const pageSource = await driver.getPageSource().catch(() => 'Unable to read page source')
-            console.log('─────────── PAGE SOURCE AT STEP 0 TIMEOUT ───────────')
-            console.log(pageSource)
-            console.log('──────────────────────────────────────────────────')
+            await dumpPageSourceOnFailure('Step 0 timeout')
             throw new Error(`Could not detect Welcome or Welcome Back screen within ${startupTimeout}ms.`)
         }
     })
@@ -580,11 +471,7 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         try {
             await testBot.waitUntilVisible(usernameField, 20000)
         } catch (err) {
-            console.error('Username field not found — dumping page source')
-            const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 3 ───────────')
-            console.log(pageSource)
-            console.log('──────────────────────────────────────────')
+            await dumpPageSourceOnFailure('Step 3')
             throw err
         }
     })
@@ -602,11 +489,7 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         try {
             await testBot.waitUntilVisible(selectors.continueButton, 20000)
         } catch (err) {
-            console.error('Continue button not found — dumping page source')
-            const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 4 ───────────')
-            console.log(pageSource)
-            console.log('──────────────────────────────────────────')
+            await dumpPageSourceOnFailure('Step 4')
             throw err
         }
     })
@@ -636,20 +519,16 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         try {
             await testBot.waitUntilVisible(selectors.identityLoginButton, 10000)
         } catch (err) {
-            console.error('Identity Login button not found — dumping page source')
-            const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 6 (before click) ───────────')
-            console.log(pageSource)
-            console.log('────────────────────────────────────────────────────────')
+            await dumpPageSourceOnFailure('Step 6 (before click)')
             throw err
         }
 
         await testBot.click(selectors.identityLoginButton)
 
         // On physical device, MSAL may open a Chrome Custom Tab
-        // or broker auth which briefly backgrounds the app.
-        // Give it up to 120s to complete and bring the app back
-        // to foreground before looking for the enrolment page.
+        // or broker auth which briefly backgrounds the app. Give
+        // it up to 120s to complete and bring the app back to
+        // foreground before looking for the enrolment page.
         const postLoginWait = isLocal ? 120000 : 20000
         await driver.pause(isLocal ? 4000 : 3000)
 
@@ -667,15 +546,7 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
             await testBot.waitUntilVisible(selectors.locationDropdown, 5000)
             await testBot.waitUntilVisible(selectors.enrolButton, 5000)
         } catch (err) {
-            console.error('Enrol page did not load after clicking Login — dumping page source')
-            try {
-                const pageSource = await driver.getPageSource()
-                console.log('─────────── PAGE SOURCE AT STEP 6 (after click) ───────────')
-                console.log(pageSource)
-                console.log('───────────────────────────────────────────────────────')
-            } catch (srcErr) {
-                console.warn('getPageSource failed (session may be dead):', srcErr)
-            }
+            await dumpPageSourceOnFailure('Step 6 (after click)')
             throw err
         }
     })
@@ -684,12 +555,14 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         if (deviceAlreadyEnrolled) { this.skip(); return; }
         await testBot.click(selectors.organisationDropdown)
         await driver.pause(3000)
-        await selectPickerOptionRobust(ORGANISATION)
+        await testBot.waitUntilVisible(selectors.optionPersonCentredSoftware, 10000)
+        await testBot.click(selectors.optionPersonCentredSoftware)
         await driver.pause(3000)
 
         await testBot.click(selectors.locationDropdown)
         await driver.pause(3000)
-        await selectPickerOptionRobust(LOCATION)
+        await testBot.waitUntilVisible(selectors.optionKerrHouseEnrolment, 10000)
+        await testBot.click(selectors.optionKerrHouseEnrolment)
         await driver.pause(3000)
 
         const enrolBtn = await $(
@@ -723,21 +596,15 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
     })
 
     it('Step 10.2 - Location field is populated with Kerr House', async () => {
-        // NB: previously called .getText() directly with no wait,
-        // which threw "element wasn't found" if LocationPicker
-        // hadn't rendered yet at this exact moment — a real run
-        // showed this failing first, then cascading into every
-        // subsequent step (UserPicker, "Akhila Nethi" all
-        // returning RESULT []). Added an explicit wait, and a
-        // page-source dump if it's still not found after that.
+        // NB: calling .getText() with no wait threw "element
+        // wasn't found" in a real run if LocationPicker hadn't
+        // rendered yet at this exact moment — explicit wait
+        // added first, with a page-source dump if it's still not
+        // found after that.
         try {
             await testBot.waitUntilVisible(selectors.locationPickerLogin, 15000)
         } catch (err) {
-            console.error('LocationPicker not visible at Step 10.2 — dumping page source')
-            const pageSource = await driver.getPageSource().catch(() => 'Unable to read page source')
-            console.log('─────────── PAGE SOURCE AT STEP 10.2 (LocationPicker not found) ───────────')
-            console.log(pageSource)
-            console.log('──────────────────────────────────────────────────────────────────────')
+            await dumpPageSourceOnFailure('Step 10.2 (LocationPicker not found)')
             throw err
         }
 
@@ -749,7 +616,8 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         if (!locationValue.includes(LOCATION)) {
             await testBot.click(selectors.locationPickerLogin)
             await driver.pause(3000)
-            await selectPickerOptionRobust(LOCATION)
+            await testBot.waitUntilVisible(selectors.optionKerrHouseWelcomeBack, 10000)
+            await testBot.click(selectors.optionKerrHouseWelcomeBack)
             await driver.pause(3000)
 
             const refreshed = await $(
@@ -764,13 +632,13 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
     it('Step 10.3 - Open user dropdown and verify users for selected location are shown', async () => {
         await testBot.click(selectors.userDropdown)
         await driver.pause(3000)
-        await testBot.waitUntilVisible(pickerOption(USER), 10000)
-        const isVisible = await testBot.isVisible(pickerOption(USER))
+        await testBot.waitUntilVisible(selectors.welcomeBackUsername, 10000)
+        const isVisible = await testBot.isVisible(selectors.welcomeBackUsername)
         expect(isVisible).toBe(true)
     })
 
     it('Step 10.4 - Select user and verify Sign In button becomes enabled', async () => {
-        await selectPickerOptionRobust(USER)
+        await testBot.click(selectors.welcomeBackUsername)
         await driver.pause(3000)
         const signInBtn = await $(
             '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/SignInButton"]'
@@ -814,9 +682,9 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
     })
 
     it('Step 10.9 - Select "Kerr House / Service Users", click Start Work and land on My Communities tab', async () => {
-        // Reliably ensures ONLY "Kerr House / Service Users"
-        // gets selected — never "South Wing" or "Training" —
-        // and confirms Start Work is enabled before proceeding.
+        // Reliably ensures ONLY "Kerr House / Service Users" gets
+        // selected — never "South Wing" or "Training" — and
+        // confirms Start Work is enabled before proceeding.
         await ensureKerrHouseServiceUsersSelected()
 
         await testBot.click(selectors.startWorkButton)
@@ -824,11 +692,7 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         try {
             await testBot.waitUntilVisible(selectors.myCommunitiesTab, isLocal ? 30000 : 120000)
         } catch (err) {
-            console.error('My Communities tab not found after Start Work — dumping page source')
-            const pageSource = await driver.getPageSource()
-            console.log('─────────── PAGE SOURCE AT STEP 10.9 ───────────')
-            console.log(pageSource)
-            console.log('────────────────────────────────────────────────')
+            await dumpPageSourceOnFailure('Step 10.9')
             throw err
         }
     })
