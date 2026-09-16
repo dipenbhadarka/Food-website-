@@ -479,7 +479,16 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         // causing this step to throw "Could not detect Welcome or
         // Welcome Back screen" before the app had even finished
         // rendering its first real screen.
-        const startupTimeout = isLocal ? 30000 : 90000
+        //
+        // NB #2: a real local-device run showed the Welcome Back
+        // screen's Sign In button present (disabled) but the
+        // Location/Username text not yet rendered even at the
+        // 30s mark — i.e. 30s was ALSO occasionally too tight
+        // locally, not just on BrowserStack. Widened to 60s for
+        // local as well, since the cost of waiting a little
+        // longer is far smaller than a false "screen not
+        // detected" failure.
+        const startupTimeout = isLocal ? 60000 : 90000
         const pollInterval = 1000
         const deadline = Date.now() + startupTimeout
 
@@ -497,9 +506,17 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
             // check too, so this remains robust if the username
             // text isn't rendered yet but the screen is otherwise
             // the Welcome Back / login screen.
+            //
+            // NB: a real run's page-source dump showed the
+            // disabled Sign In button rendering BEFORE the
+            // Location/Username text — added as a third,
+            // earliest-available detection signal so this step
+            // can succeed sooner rather than waiting for every
+            // field to finish rendering.
             welcomeBackVisible =
                 (await testBot.isVisible(selectors.welcomeBackUsername).catch(() => false)) ||
-                (await testBot.isVisible(selectors.locationPickerLogin).catch(() => false))
+                (await testBot.isVisible(selectors.locationPickerLogin).catch(() => false)) ||
+                (await testBot.isVisible(selectors.signInButton).catch(() => false))
 
             if (regionDropdownVisible || welcomeBackVisible) {
                 break
