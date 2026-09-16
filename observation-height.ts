@@ -406,10 +406,44 @@ async function expectGuidance(
     }
 }
 
+// ─────────────────────────────────────────────
+// Boundary Value Analysis for the Height field's
+// accepted range (50-300). Covers both NEGATIVE
+// (invalid) values — below the minimum, zero, and
+// a large negative number — and POSITIVE
+// (invalid) values above the maximum, plus the
+// exact boundary edges themselves. Every value in
+// INVALID_HEIGHT_VALUES is expected to trigger
+// validation; every value in VALID_HEIGHT_VALUES
+// is expected NOT to.
+// ─────────────────────────────────────────────
+const INVALID_HEIGHT_VALUES = [
+    String(CLINICAL_MIN - 1),   // 49  - just below minimum
+    String(CLINICAL_MAX + 1),   // 301 - just above maximum
+    '0',                        // zero
+    '-1',                       // small negative
+    '-100',                     // large negative
+    '9999',                     // large positive, far above maximum
+    'abc',                      // non-numeric
+]
+
+const VALID_HEIGHT_VALUES = [
+    String(CLINICAL_MIN),       // 50  - exact lower boundary
+    String(CLINICAL_MAX),       // 300 - exact upper boundary
+    VALID_HEIGHT,                // 170 - mid-range
+]
+
 async function runClinicalBoundaryAnalysis(): Promise<void> {
-    for (const value of [String(CLINICAL_MIN - 1), String(CLINICAL_MAX + 1)]) {
+    for (const value of INVALID_HEIGHT_VALUES) {
+        console.log(`Testing invalid Height value: "${value}"`)
         await setHeight(value)
         await expectClinicalValidation(true)
+    }
+
+    for (const value of VALID_HEIGHT_VALUES) {
+        console.log(`Testing valid Height value: "${value}"`)
+        await setHeight(value)
+        await expectClinicalValidation(false)
     }
 }
 
@@ -502,14 +536,11 @@ describe('Resident Area Profile - Observations - Height', () => {
         })
     })
 
-    it('Rejects zero and negative Height values, then completes with a valid value', async () => {
-        await runStep('zero and negative Height', async () => {
+    it('Rejects invalid positive and negative Height values, then completes with a valid value', async () => {
+        await runStep('positive and negative invalid Height', async () => {
             await openHeightCareNote(NON_BASELINE_RESIDENT)
 
-            for (const value of ['0', '-1']) {
-                await setHeight(value)
-                await expectClinicalValidation(true)
-            }
+            await runClinicalBoundaryAnalysis()
 
             await setHeight(VALID_HEIGHT)
             await expectClinicalValidation(false)
