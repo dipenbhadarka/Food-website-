@@ -48,7 +48,7 @@ const selectors = {
 
     optionUnitedKingdom: {
         android: AndroidLocatorBuilder.xpath(
-            '//android.widget.TextView[@resource-id="android:id/text1" and @text="United Kingdom"]'
+            '//android.widget.TextView[@text="United Kingdom"]'
         ),
         ios: iOSLocatorBuilder.xpath(
             '//XCUIElementTypePickerWheel[@value="United Kingdom"]'
@@ -130,6 +130,43 @@ const selectors = {
             '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/LocationPicker"]'
         ),
         ios: iOSLocatorBuilder.id('LocationPicker'),
+    } as TestBotElement,
+
+    // ── NEW: exact organisation option text, used on the
+    // enrolment screen's Organisation picker.
+    optionPersonCentredSoftware: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.TextView[@text="Person Centred Software"]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeStaticText[@name="Person Centred Software"]'
+        ),
+    } as TestBotElement,
+
+    // ── NEW: "Kerr House" appears twice in the picker list
+    // that opens for Location on the enrolment screen — this
+    // selects the SECOND match specifically, per the provided
+    // locator index [2].
+    optionKerrHouseEnrolment: {
+        android: AndroidLocatorBuilder.xpath(
+            '(//android.widget.TextView[@text="Kerr House"])[2]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '(//XCUIElementTypeStaticText[@name="Kerr House"])[2]'
+        ),
+    } as TestBotElement,
+
+    // ── NEW: same underlying locator/index as
+    // optionKerrHouseEnrolment above, but named separately
+    // since it is used on the Welcome Back screen's own
+    // Location/site picker, a different screen context.
+    optionKerrHouseWelcomeBack: {
+        android: AndroidLocatorBuilder.xpath(
+            '(//android.widget.TextView[@text="Kerr House"])[2]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '(//XCUIElementTypeStaticText[@name="Kerr House"])[2]'
+        ),
     } as TestBotElement,
 
     // ── CHANGED per request: the Welcome Back screen's
@@ -628,12 +665,14 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         if (deviceAlreadyEnrolled) { this.skip(); return; }
         await testBot.click(selectors.organisationDropdown)
         await driver.pause(3000)
-        await selectPickerOptionRobust(ORGANISATION)
+        await testBot.waitUntilVisible(selectors.optionPersonCentredSoftware, 10000)
+        await testBot.click(selectors.optionPersonCentredSoftware)
         await driver.pause(3000)
 
         await testBot.click(selectors.locationDropdown)
         await driver.pause(3000)
-        await selectPickerOptionRobust(LOCATION)
+        await testBot.waitUntilVisible(selectors.optionKerrHouseEnrolment, 10000)
+        await testBot.click(selectors.optionKerrHouseEnrolment)
         await driver.pause(3000)
 
         const enrolBtn = await $(
@@ -675,7 +714,8 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         if (!locationValue.includes(LOCATION)) {
             await testBot.click(selectors.locationPickerLogin)
             await driver.pause(3000)
-            await selectPickerOptionRobust(LOCATION)
+            await testBot.waitUntilVisible(selectors.optionKerrHouseWelcomeBack, 10000)
+            await testBot.click(selectors.optionKerrHouseWelcomeBack)
             await driver.pause(3000)
 
             const refreshed = await $(
@@ -690,13 +730,13 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
     it('Step 10.3 - Open user dropdown and verify users for selected location are shown', async () => {
         await testBot.click(selectors.userDropdown)
         await driver.pause(3000)
-        await testBot.waitUntilVisible(pickerOption(USER), 10000)
-        const isVisible = await testBot.isVisible(pickerOption(USER))
+        await testBot.waitUntilVisible(selectors.welcomeBackUsername, 10000)
+        const isVisible = await testBot.isVisible(selectors.welcomeBackUsername)
         expect(isVisible).toBe(true)
     })
 
     it('Step 10.4 - Select user and verify Sign In button becomes enabled', async () => {
-        await selectPickerOptionRobust(USER)
+        await testBot.click(selectors.welcomeBackUsername)
         await driver.pause(3000)
         const signInBtn = await $(
             '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/SignInButton"]'
