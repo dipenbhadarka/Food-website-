@@ -507,16 +507,18 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
             // text isn't rendered yet but the screen is otherwise
             // the Welcome Back / login screen.
             //
-            // NB: a real run's page-source dump showed the
-            // disabled Sign In button rendering BEFORE the
-            // Location/Username text — added as a third,
-            // earliest-available detection signal so this step
-            // can succeed sooner rather than waiting for every
-            // field to finish rendering.
+            // NB: signInButton was tried as a third, earlier
+            // detection signal, but a real run then failed at
+            // Step 10.2/10.3 with LocationPicker/UserPicker/
+            // "Akhila Nethi" all returning RESULT [] — meaning
+            // signInButton likely also matches some OTHER screen
+            // that is not actually the Welcome Back screen,
+            // causing a false-positive detection here and a
+            // cascade of failures downstream. Reverted to the
+            // two originally-confirmed signals only.
             welcomeBackVisible =
                 (await testBot.isVisible(selectors.welcomeBackUsername).catch(() => false)) ||
-                (await testBot.isVisible(selectors.locationPickerLogin).catch(() => false)) ||
-                (await testBot.isVisible(selectors.signInButton).catch(() => false))
+                (await testBot.isVisible(selectors.locationPickerLogin).catch(() => false))
 
             if (regionDropdownVisible || welcomeBackVisible) {
                 break
@@ -723,6 +725,24 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
     })
 
     it('Step 10.2 - Location field is populated with Kerr House', async () => {
+        // NB: previously called .getText() directly with no wait,
+        // which threw "element wasn't found" if LocationPicker
+        // hadn't rendered yet at this exact moment — a real run
+        // showed this failing first, then cascading into every
+        // subsequent step (UserPicker, "Akhila Nethi" all
+        // returning RESULT []). Added an explicit wait, and a
+        // page-source dump if it's still not found after that.
+        try {
+            await testBot.waitUntilVisible(selectors.locationPickerLogin, 15000)
+        } catch (err) {
+            console.error('LocationPicker not visible at Step 10.2 — dumping page source')
+            const pageSource = await driver.getPageSource().catch(() => 'Unable to read page source')
+            console.log('─────────── PAGE SOURCE AT STEP 10.2 (LocationPicker not found) ───────────')
+            console.log(pageSource)
+            console.log('──────────────────────────────────────────────────────────────────────')
+            throw err
+        }
+
         const locationEl = await $(
             '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/LocationPicker"]'
         )
