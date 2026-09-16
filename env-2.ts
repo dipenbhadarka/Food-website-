@@ -747,18 +747,73 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
     it('Step 10.3 - Open user dropdown and verify users for selected location are shown', async () => {
         await testBot.click(selectors.userDropdown)
         await driver.pause(3000)
+
+        let usernameVisible = await testBot.isVisible(selectors.welcomeBackUsername).catch(() => false)
+
+        if (!usernameVisible) {
+            console.log('"Akhila Nethi" not immediately visible after opening user dropdown — scrolling to find it')
+            try {
+                const scrolled = await $(
+                    'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
+                    '.scrollIntoView(new UiSelector().text("Akhila Nethi"))'
+                )
+                usernameVisible = await scrolled.isExisting()
+            } catch (scrollErr) {
+                console.warn('Scroll-to-find "Akhila Nethi" failed:', scrollErr)
+            }
+        }
+
+        if (!usernameVisible) {
+            console.error('"Akhila Nethi" not found in user dropdown, even after scrolling — dumping page source')
+            const pageSource = await driver.getPageSource().catch(() => 'Unable to read page source')
+            console.log('─────────── PAGE SOURCE AT STEP 10.3 ───────────')
+            console.log(pageSource)
+            console.log('────────────────────────────────────────────')
+        }
+
         await testBot.waitUntilVisible(selectors.welcomeBackUsername, 10000)
         const isVisible = await testBot.isVisible(selectors.welcomeBackUsername)
         expect(isVisible).toBe(true)
     })
 
     it('Step 10.4 - Select user and verify Sign In button becomes enabled', async () => {
+        // NB: a tap that registers per Appium but produces no
+        // app response (the element gets found and "clicked",
+        // but the app doesn't actually select it) has been a
+        // recurring issue elsewhere in this codebase — retry
+        // once, then dump page source with a clear diagnostic
+        // message if Sign In still never enables, rather than
+        // silently hanging on a generic timeout.
         await testBot.click(selectors.welcomeBackUsername)
+        console.log('Tapped "Akhila Nethi" (attempt 1)')
         await driver.pause(3000)
-        const signInBtn = await $(
+
+        const signInBtnXpath =
             '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/SignInButton"]'
-        )
-        const isEnabled = await signInBtn.isEnabled()
+        let signInBtn = await $(signInBtnXpath)
+        let isEnabled = await signInBtn.isEnabled().catch(() => false)
+
+        if (!isEnabled) {
+            console.log('Sign In not enabled after first tap — retrying tap on "Akhila Nethi" (attempt 2)')
+            const retryEl = await $(await (testBot as any).getLocatorTextForElement(selectors.welcomeBackUsername))
+            if (await retryEl.isDisplayed().catch(() => false)) {
+                await retryEl.click()
+                await driver.pause(3000)
+                signInBtn = await $(signInBtnXpath)
+                isEnabled = await signInBtn.isEnabled().catch(() => false)
+            } else {
+                console.warn('"Akhila Nethi" no longer displayed for retry — dropdown may have closed unexpectedly')
+            }
+        }
+
+        if (!isEnabled) {
+            console.error('Sign In still not enabled after 2 taps on "Akhila Nethi" — dumping page source')
+            const pageSource = await driver.getPageSource().catch(() => 'Unable to read page source')
+            console.log('─────────── PAGE SOURCE AT STEP 10.4 ───────────')
+            console.log(pageSource)
+            console.log('────────────────────────────────────────────')
+        }
+
         expect(isEnabled).toBe(true)
     })
 
