@@ -637,8 +637,18 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         }
     })
 
-    it('Step 7 - Select Organisation and Location via search popups; verify Enrol button is enabled', async function () {
+    it('Step 7 - Leave Serial Number and Device Name blank; select Organisation and Location; verify Enrol button is enabled', async function () {
         if (deviceAlreadyEnrolled) { this.skip(); return; }
+
+        // Per TC 49180 Step 7: "Leave Serial number field blank,
+        // Leave device name blank" — these two fields exist on
+        // this screen but are intentionally NOT filled in. No
+        // locators have been provided for them; since the test
+        // case requires leaving them blank anyway, no action is
+        // taken here, which already satisfies that requirement.
+        // If a locator for either field becomes available later
+        // and an explicit "confirm still blank" check is wanted,
+        // add it here.
 
         await selectFromSearchPopup(
             selectors.organisationDropdown,
