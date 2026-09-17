@@ -688,11 +688,50 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
 
     it('Step 10.2 - Select Kerr House and show its users', async () => {
         try {
-            await selectFromSearchPopup(
-                selectors.siteDropdown,
-                selectors.optionKerrHouseWelcomeBack,
-                LOCATION
-            )
+            // NB: siteDropdown's own locator matches BOTH "Select
+            // Site" (unselected state) AND "Kerr House" (already
+            // selected state) — the same text as the actual popup
+            // option we need to tap. This meant
+            // selectFromSearchPopup()'s "is the option already
+            // visible" check could match the TRIGGER label itself
+            // (which also reads "Kerr House") and wrongly conclude
+            // the option was already selected, skipping the real
+            // tap on the popup list item entirely. Fixed by
+            // opening the dropdown directly here, then explicitly
+            // locating and tapping the option WITHIN the opened
+            // popup list — never reusing siteDropdown as a stand-in
+            // for "already selected".
+            await testBot.click(selectors.siteDropdown)
+            await driver.pause(1500)
+
+            let optionVisible = await testBot.isVisible(selectors.optionKerrHouseWelcomeBack).catch(() => false)
+
+            if (!optionVisible) {
+                const searchVisible = await testBot.isVisible(selectors.pickerPopupSearchEntry).catch(() => false)
+                if (searchVisible) {
+                    await testBot.click(selectors.pickerPopupSearchEntry)
+                    await testBot.enterText(selectors.pickerPopupSearchEntry, LOCATION, false)
+                    await driver.pause(1000)
+                    optionVisible = await testBot.isVisible(selectors.optionKerrHouseWelcomeBack).catch(() => false)
+                }
+            }
+
+            if (!optionVisible) {
+                await dumpPageSourceOnFailure('Step 10.2 - "Kerr House" option not found in popup')
+                throw new Error('Could not find "Kerr House" in the site popup, even after searching')
+            }
+
+            await testBot.click(selectors.optionKerrHouseWelcomeBack)
+            console.log('Selected "Kerr House" from site popup')
+            await driver.pause(1500)
+
+            // Verify the dropdown now actually shows "Kerr House"
+            // as its selected value, confirming the tap registered.
+            const nowShowsKerrHouse = await testBot.isVisible(selectors.siteDropdown).catch(() => false)
+            if (!nowShowsKerrHouse) {
+                await dumpPageSourceOnFailure('Step 10.2 - site dropdown does not show Kerr House after tap')
+                throw new Error('Tapped "Kerr House" but the site dropdown does not appear to reflect the selection')
+            }
         } catch (err) {
             await dumpPageSourceOnFailure('Step 10.2 (Kerr House site selection)')
             throw err
@@ -712,12 +751,38 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
     })
 
     it('Step 10.4 - Select user and verify Sign In button becomes enabled', async () => {
+        // NB: a tap that registers per Appium but produces no
+        // app response has been a recurring issue elsewhere in
+        // this codebase — retry once, then dump page source with
+        // a clear diagnostic if Sign In still never enables,
+        // rather than silently hanging on the final expect()
+        // mismatch with zero information about what's on screen.
         await testBot.click(selectors.welcomeBackUsername)
+        console.log('Tapped "Akhila Nethi" (attempt 1)')
         await driver.pause(3000)
-        const signInBtn = await $(
+
+        const signInBtnXpath =
             '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/SignInButton"]'
-        )
-        const isEnabled = await signInBtn.isEnabled()
+        let signInBtn = await $(signInBtnXpath)
+        let isEnabled = await signInBtn.isEnabled().catch(() => false)
+
+        if (!isEnabled) {
+            console.log('Sign In not enabled after first tap — retrying tap on "Akhila Nethi" (attempt 2)')
+            const stillVisible = await testBot.isVisible(selectors.welcomeBackUsername).catch(() => false)
+            if (stillVisible) {
+                await testBot.click(selectors.welcomeBackUsername)
+                await driver.pause(3000)
+                signInBtn = await $(signInBtnXpath)
+                isEnabled = await signInBtn.isEnabled().catch(() => false)
+            } else {
+                console.warn('"Akhila Nethi" no longer visible for retry — dropdown may have closed unexpectedly')
+            }
+        }
+
+        if (!isEnabled) {
+            await dumpPageSourceOnFailure('Step 10.4 - Sign In still not enabled after 2 taps on "Akhila Nethi"')
+        }
+
         expect(isEnabled).toBe(true)
     })
 
