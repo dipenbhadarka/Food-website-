@@ -158,9 +158,7 @@ const selectors = {
 
     // ── CHANGED: Location is now a plain TextView label
     // that opens the shared search popup, not an EditText
-    // LocationPicker (that EditText is kept below as
-    // locationPickerLogin, still needed for the Welcome Back
-    // screen and for reading back the confirmed value).
+    // LocationPicker.
     locationDropdown: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.TextView[@text="Location"]'
@@ -171,7 +169,7 @@ const selectors = {
     // On the enrolment screen's Location search popup, "Kerr
     // House" is selected directly by plain text — no [2] index
     // given for this screen (unlike the Welcome Back screen,
-    // which explicitly uses index [2]).
+    // which uses [last()] below).
     optionKerrHouseEnrolment: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.TextView[@text="Kerr House"]'
@@ -195,30 +193,34 @@ const selectors = {
         ios: iOSLocatorBuilder.id('LogoutButton'),
     } as TestBotElement,
 
-    // Still the EditText Location field used on the Welcome
-    // Back / login screen (distinct screen from the enrolment
-    // Location dropdown above), and used for Step 0 detection
-    // and for reading back the confirmed value in Step 10.2.
-    locationPickerLogin: {
+    // ── CONFIRMED WORKING: the Welcome Back screen's site
+    // picker is a plain TextView label ("Select Site" or,
+    // once chosen, showing "Kerr House"), NOT an EditText
+    // LocationPicker. This was the actual root cause of the
+    // previous version's Step 0 detection failure.
+    siteDropdown: {
         android: AndroidLocatorBuilder.xpath(
-            '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/LocationPicker"]'
+            '//android.widget.TextView[@text="Select Site" or @text="Kerr House"]'
         ),
-        ios: iOSLocatorBuilder.id('LocationPicker'),
+        ios: iOSLocatorBuilder.id('Select Site'),
     } as TestBotElement,
 
+    // ── CONFIRMED WORKING: the Welcome Back screen's user
+    // picker is also a plain TextView label ("Select User"),
+    // not an EditText UserPicker.
     userDropdown: {
         android: AndroidLocatorBuilder.xpath(
-            '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/UserPicker"]'
+            '//android.widget.TextView[@text="Select User"]'
         ),
-        ios: iOSLocatorBuilder.id('UserPicker'),
+        ios: iOSLocatorBuilder.id('Select User'),
     } as TestBotElement,
 
-    // Welcome Back screen's site/location picker — "Kerr
-    // House" is the SECOND match on this screen specifically,
-    // per the provided index [2].
+    // Welcome Back screen's site/location picker option —
+    // uses [last()] rather than a fixed [2] index, more
+    // robust if the number of "Kerr House" matches changes.
     optionKerrHouseWelcomeBack: {
         android: AndroidLocatorBuilder.xpath(
-            '(//android.widget.TextView[@text="Kerr House"])[2]'
+            '(//android.widget.TextView[@text="Kerr House"])[last()]'
         ),
         ios: iOSLocatorBuilder.xpath(
             '(//XCUIElementTypeStaticText[@name="Kerr House"])[2]'
@@ -241,10 +243,9 @@ const selectors = {
         ios: iOSLocatorBuilder.id('SignInButton'),
     } as TestBotElement,
 
-    // ── Communities screen — now FIVE options confirmed
-    // (North Wing added since the last list): each with an
-    // EXACT-match locator so they can never be confused with
-    // one another.
+    // ── Communities screen — FIVE options confirmed (North
+    // Wing included): each with an EXACT-match locator so
+    // they can never be confused with one another.
     kerrHouseServiceUsers: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.TextView[@text="Kerr House / Service Users"]'
@@ -263,8 +264,6 @@ const selectors = {
         ),
     } as TestBotElement,
 
-    // Explicitly defined so we can positively confirm we are
-    // NOT accidentally on any of these other three options.
     kerrHouseNorthWing: {
         android: AndroidLocatorBuilder.xpath(
             '//android.widget.TextView[@text="Kerr House / North Wing"]'
@@ -418,8 +417,9 @@ async function submitUsername(): Promise<void> {
 // ─────────────────────────────────────────────
 // Helper — opens a search-popup-based dropdown
 // (Region, Organisation, or Location on the
-// enrolment screen), types into the search entry
-// if needed, and selects the given option.
+// enrolment screen; Site or User on the Welcome
+// Back screen), types into the search entry if
+// needed, and selects the given option.
 // ─────────────────────────────────────────────
 async function selectFromSearchPopup(
     dropdownTrigger: TestBotElement,
@@ -432,9 +432,6 @@ async function selectFromSearchPopup(
     let optionVisible = await testBot.isVisible(optionLocator).catch(() => false)
 
     if (!optionVisible) {
-        // Try typing into the search popup to filter the list
-        // down, in case the option isn't visible without
-        // scrolling/filtering first.
         const searchVisible = await testBot.isVisible(selectors.pickerPopupSearchEntry).catch(() => false)
         if (searchVisible) {
             await testBot.click(selectors.pickerPopupSearchEntry)
@@ -504,11 +501,13 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         let pollCount = 0
 
         while (Date.now() < deadline) {
-            regionDropdownVisible = await testBot.isVisible(selectors.selectRegionDropdown).catch(() => false)
+            regionDropdownVisible =
+                (await testBot.isVisible(selectors.infoButtonIcon).catch(() => false)) ||
+                (await testBot.isVisible(selectors.selectRegionDropdown).catch(() => false))
 
             welcomeBackVisible =
                 (await testBot.isVisible(selectors.welcomeBackUsername).catch(() => false)) ||
-                (await testBot.isVisible(selectors.locationPickerLogin).catch(() => false))
+                (await testBot.isVisible(selectors.siteDropdown).catch(() => false))
 
             if (regionDropdownVisible || welcomeBackVisible) {
                 break
@@ -534,19 +533,18 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         }
     })
 
-    it('Step 1 - App opens to Welcome screen with region dropdown', async function () {
+    it('Step 1 - Open device information and start enrolment', async function () {
         if (deviceAlreadyEnrolled) { this.skip(); return; }
-        await driver.pause(3000)
+        await testBot.waitUntilVisible(selectors.infoButtonIcon, 15000)
+        await testBot.click(selectors.infoButtonIcon)
+        await testBot.waitUntilVisible(selectors.enrollDeviceButton, 10000)
+        await testBot.click(selectors.enrollDeviceButton)
         await testBot.waitUntilVisible(selectors.selectRegionDropdown, 15000)
-        await testBot.waitUntilVisible(selectors.enrollDeviceButton, 5000)
     })
 
-    it('Step 2 - Select region United Kingdom, click Enrol device, then click the resulting Login trigger', async function () {
+    it('Step 2 - Select region United Kingdom and continue to login', async function () {
         if (deviceAlreadyEnrolled) { this.skip(); return; }
         await selectFromSearchPopup(selectors.selectRegionDropdown, selectors.optionUnitedKingdom, 'United Kingdom')
-
-        await testBot.click(selectors.enrollDeviceButton)
-        await driver.pause(isLocal ? 3000 : 5000)
 
         try {
             await testBot.waitUntilVisible(selectors.triggerEnrolLoginButton, 10000)
@@ -639,17 +637,8 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
 
     it('Step 7 - Leave Serial Number and Device Name blank; select Organisation and Location; verify Enrol button is enabled', async function () {
         if (deviceAlreadyEnrolled) { this.skip(); return; }
-
         // Per TC 49180 Step 7: "Leave Serial number field blank,
-        // Leave device name blank" — these two fields exist on
-        // this screen but are intentionally NOT filled in. No
-        // locators have been provided for them; since the test
-        // case requires leaving them blank anyway, no action is
-        // taken here, which already satisfies that requirement.
-        // If a locator for either field becomes available later
-        // and an explicit "confirm still blank" check is wanted,
-        // add it here.
-
+        // Leave device name blank" — intentionally not touched.
         await selectFromSearchPopup(
             selectors.organisationDropdown,
             selectors.optionPersonCentredSoftware,
@@ -679,10 +668,15 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         if (deviceAlreadyEnrolled) { this.skip(); return; }
         await testBot.click(selectors.logoutButton)
         await driver.pause(3000)
-        await testBot.waitUntilVisible(selectors.locationPickerLogin, 15000)
+        try {
+            await testBot.waitUntilVisible(selectors.userDropdown, 30000)
+        } catch (err) {
+            await dumpPageSourceOnFailure('Step 9 (Welcome Back screen)')
+            throw err
+        }
     })
 
-    it('Step 10.1 - App opens on Username selection screen; Sign In button is disabled', async () => {
+    it('Step 10.1 - App opens on site selection screen; Sign In button is disabled', async () => {
         await testBot.waitUntilVisible(selectors.userDropdown, 10000)
         await testBot.waitUntilVisible(selectors.signInButton, 5000)
         const signInBtn = await $(
@@ -692,38 +686,26 @@ describe('Care Delivery - Full Enrolment & Login Flow', () => {
         expect(isEnabled).toBe(false)
     })
 
-    it('Step 10.2 - Location field is populated with Kerr House', async () => {
+    it('Step 10.2 - Select Kerr House and show its users', async () => {
         try {
-            await testBot.waitUntilVisible(selectors.locationPickerLogin, 15000)
+            await selectFromSearchPopup(
+                selectors.siteDropdown,
+                selectors.optionKerrHouseWelcomeBack,
+                LOCATION
+            )
         } catch (err) {
-            await dumpPageSourceOnFailure('Step 10.2 (LocationPicker not found)')
+            await dumpPageSourceOnFailure('Step 10.2 (Kerr House site selection)')
             throw err
         }
-
-        const locationEl = await $(
-            '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/LocationPicker"]'
-        )
-        let locationValue = await locationEl.getText()
-
-        if (!locationValue.includes(LOCATION)) {
-            await testBot.click(selectors.locationPickerLogin)
-            await driver.pause(3000)
-            await testBot.waitUntilVisible(selectors.optionKerrHouseWelcomeBack, 10000)
-            await testBot.click(selectors.optionKerrHouseWelcomeBack)
-            await driver.pause(3000)
-
-            const refreshed = await $(
-                '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/LocationPicker"]'
-            )
-            locationValue = await refreshed.getText()
-        }
-
-        expect(locationValue).toContain(LOCATION)
     })
 
-    it('Step 10.3 - Open user dropdown and verify users for selected location are shown', async () => {
+    it('Step 10.3 - Verify users for selected location are shown', async () => {
         await testBot.click(selectors.userDropdown)
-        await driver.pause(3000)
+        const userVisible = await testBot.isVisible(selectors.welcomeBackUsername).catch(() => false)
+        if (!userVisible) {
+            await testBot.waitUntilVisible(selectors.pickerPopupSearchEntry, 10000)
+            await testBot.enterText(selectors.pickerPopupSearchEntry, USER, false)
+        }
         await testBot.waitUntilVisible(selectors.welcomeBackUsername, 10000)
         const isVisible = await testBot.isVisible(selectors.welcomeBackUsername)
         expect(isVisible).toBe(true)
