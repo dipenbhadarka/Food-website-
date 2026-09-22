@@ -277,7 +277,7 @@ async function selectBloodO2Tile(): Promise<void> {
     await bloodO2Tile.waitForDisplayed({ timeout: 10000 })
 
     await tapElementCenter(bloodO2Tile)
-    await driver.pause(1000)
+    await driver.pause(500)
 
     if (!(await isVisible(selectors.nextButton))) {
         const suppliedXpath = await (testBot as any)
@@ -286,7 +286,7 @@ async function selectBloodO2Tile(): Promise<void> {
 
         if (await suppliedImage.isDisplayed().catch(() => false)) {
             await tapElementCenter(suppliedImage)
-            await driver.pause(1000)
+            await driver.pause(500)
         }
     }
 
@@ -296,40 +296,57 @@ async function selectBloodO2Tile(): Promise<void> {
 }
 
 async function setBloodO2(value: string): Promise<void> {
-    const xpath = await (testBot as any)
-        .getLocatorTextForElement(selectors.bloodO2Input)
+    // Every step has its own timeout so a genuine hang fails
+    // fast with a clear error rather than freezing forever.
+    // Timeouts trimmed to match how fast each call actually
+    // needs to be — these are simple, near-instant operations
+    // on a single text field, not multi-second waits.
+    const xpath = await withTimeout(
+        (testBot as any).getLocatorTextForElement(selectors.bloodO2Input),
+        2000,
+        `setBloodO2("${value}") - getLocatorTextForElement`
+    )
     const input = await $(xpath)
-    await input.waitForDisplayed({ timeout: 5000 })
-    await input.click()
-    await input.clearValue()
-    await input.setValue(value)
+    await withTimeout(input.waitForDisplayed({ timeout: 3000 }), 3500, `setBloodO2("${value}") - waitForDisplayed`)
+    await withTimeout(input.click(), 2000, `setBloodO2("${value}") - click`)
+    await withTimeout(input.clearValue(), 2000, `setBloodO2("${value}") - clearValue`)
+    await withTimeout(input.setValue(value), 2000, `setBloodO2("${value}") - setValue`)
 
     try {
-        await driver.hideKeyboard()
+        await withTimeout(driver.hideKeyboard(), 1500, `setBloodO2("${value}") - hideKeyboard`)
     } catch {
-        // The keyboard may already be closed on cloud devices.
+        // The keyboard may already be closed on cloud devices,
+        // or hideKeyboard itself timed out — either way, non-fatal.
     }
-    await driver.pause(300)
+    await driver.pause(150)
 }
 
 async function clearBloodO2(): Promise<void> {
-    const xpath = await (testBot as any)
-        .getLocatorTextForElement(selectors.bloodO2Input)
+    const xpath = await withTimeout(
+        (testBot as any).getLocatorTextForElement(selectors.bloodO2Input),
+        2000,
+        'clearBloodO2 - getLocatorTextForElement'
+    )
     const input = await $(xpath)
-    await input.waitForDisplayed({ timeout: 5000 })
-    await input.click()
-    await input.clearValue()
+    await withTimeout(input.waitForDisplayed({ timeout: 3000 }), 3500, 'clearBloodO2 - waitForDisplayed')
+    await withTimeout(input.click(), 2000, 'clearBloodO2 - click')
+    await withTimeout(input.clearValue(), 2000, 'clearBloodO2 - clearValue')
 
     try {
-        await driver.hideKeyboard()
+        await withTimeout(driver.hideKeyboard(), 1500, 'clearBloodO2 - hideKeyboard')
     } catch {
-        // The keyboard may already be closed on cloud devices.
+        // The keyboard may already be closed on cloud devices,
+        // or hideKeyboard itself timed out — either way, non-fatal.
     }
-    await driver.pause(300)
+    await driver.pause(150)
 
-    const value = (process.env.PLATFORM || 'android').toLowerCase() === 'android'
-        ? await input.getAttribute('text')
-        : await input.getValue()
+    const value = await withTimeout(
+        (process.env.PLATFORM || 'android').toLowerCase() === 'android'
+            ? input.getAttribute('text')
+            : input.getValue(),
+        2000,
+        'clearBloodO2 - read back value'
+    )
 
     if (value !== '') {
         throw new Error(`Blood O2 field was not blank. Current value: "${value}"`)
@@ -372,9 +389,9 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): P
 }
 
 async function expectClinicalValidation(expected: boolean, attemptedValue?: string): Promise<void> {
-    const messageDisplayed = await withTimeout(isVisible(selectors.validationError), 3000, 'validationError check').catch(() => false)
-    const actualValue = await withTimeout(readBloodO2FieldValue(), 3000, 'readBloodO2FieldValue')
-    const confirmEnabled = await withTimeout(isConfirmEnabled(), 3000, 'isConfirmEnabled')
+    const messageDisplayed = await withTimeout(isVisible(selectors.validationError), 1500, 'validationError check').catch(() => false)
+    const actualValue = await withTimeout(readBloodO2FieldValue(), 1500, 'readBloodO2FieldValue')
+    const confirmEnabled = await withTimeout(isConfirmEnabled(), 1500, 'isConfirmEnabled')
 
     // "Rejected" = a validation message is shown, OR the field
     // does not hold the value we tried to enter (app blocked or
