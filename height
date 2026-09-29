@@ -1,0 +1,533 @@
+import { testBot } from '../../../testbot'
+import { AndroidLocatorBuilder } from '../../../TestBot/Locators/Android/AndroidLocatorBuilder'
+import { iOSLocatorBuilder } from '../../../TestBot/Locators/iOS/iOSLocatorBuilder'
+import { TestBotElement } from '../../../TestBot/TestBotElement'
+
+const HEIGHT_RESIDENTS = [
+    'Ah-Na Gravy',
+    'Alan Gravy',
+    'Albie Armstrong',
+    'Arturo Reyes',
+    'Benita Reyes',
+    'Brenda Brown',
+    'Charlotte Crawley',
+    'Freya Farrow',
+    'Gaz Garfield',
+    'Harriet Harper',
+    'Ingrid Ingleberry',
+    'Jo Johnson',
+    'Mack Michaels',
+    'Maureeen Moor',
+    'Rico Dawson',
+    'Robyn Partridge',
+    'Rosie Matthews',
+    'Victor Willson',
+    'Yasmine Young',
+]
+
+function randomHeightResident(): string {
+    return process.env.HEIGHT_RESIDENT || HEIGHT_RESIDENTS[
+        Math.floor(Math.random() * HEIGHT_RESIDENTS.length)
+    ]
+}
+
+// Height values from 50 through 300 are accepted.
+const CLINICAL_MIN = 50
+const CLINICAL_MAX = 300
+
+const VALID_HEIGHT = '170'
+
+function locator(androidXpath: string, iosXpath: string): TestBotElement {
+    return {
+        android: AndroidLocatorBuilder.xpath(androidXpath),
+        ios: iOSLocatorBuilder.xpath(iosXpath),
+    } as TestBotElement
+}
+
+function residentLocator(name: string): TestBotElement {
+    return locator(
+        `//android.widget.TextView[@text="${name}"]`,
+        `//XCUIElementTypeStaticText[@name="${name}"]`
+    )
+}
+
+const selectors = {
+    adhocButton: locator(
+        '//android.widget.TextView[@text="Adhoc"]',
+        '//XCUIElementTypeStaticText[@name="Adhoc"]'
+    ),
+
+    expandAllSectionsButton: locator(
+        '//android.widget.Button[@text="\uE0A4"]',
+        '//XCUIElementTypeButton[@name=""]'
+    ),
+
+    // Label displayed on the Height care-note tile.
+    heightText: locator(
+        '//android.widget.TextView[@text="Record height"]',
+        '//XCUIElementTypeStaticText[@name="Record height"]'
+    ),
+
+    heightSelectionButton: locator(
+        '//android.widget.TextView[@text="Record height"]/parent::android.view.ViewGroup',
+        '//XCUIElementTypeStaticText[@name="Record height"]/ancestor::XCUIElementTypeOther[1]'
+    ),
+
+    // Main icon inside the Height tile provides the most reliable tap target.
+    heightImage: locator(
+        '//android.widget.TextView[@text="Record height"]/parent::android.view.ViewGroup/android.widget.ImageView[1]',
+        '//XCUIElementTypeStaticText[@name="Record height"]/preceding-sibling::XCUIElementTypeImage[1]'
+    ),
+
+    nextButton: locator(
+        '//android.widget.Button[@text="Next"]',
+        '//XCUIElementTypeButton[@name="Next"]'
+    ),
+
+    // Numeric Height input displayed after selecting the care note.
+    heightInput: locator(
+        '//android.widget.EditText',
+        '//XCUIElementTypeTextField'
+    ),
+
+    // Range validation shown for values outside 50-300.
+    validationError: locator(
+        '//android.widget.TextView[contains(@text,"range")]',
+        '//XCUIElementTypeStaticText[contains(@name,"range")]'
+    ),
+
+    // Personalized guidance locators retained for Height baseline checks.
+    lowBaselineGuidance: locator(
+        '//android.widget.TextView[contains(@text,"Height is too low") or contains(@text,"Height is lower than")]',
+        '//XCUIElementTypeStaticText[contains(@name,"Height is too low") or contains(@name,"Height is lower than")]'
+    ),
+
+    highBaselineGuidance: locator(
+        '//android.widget.TextView[contains(@text,"Height is too high") or contains(@text,"Height is higher than")]',
+        '//XCUIElementTypeStaticText[contains(@name,"Height is too high") or contains(@name,"Height is higher than")]'
+    ),
+
+    durationOptions: locator(
+        '//android.widget.TextView[contains(@text,"mins")]',
+        '//XCUIElementTypeStaticText[contains(@name,"mins")]'
+    ),
+
+    confirmButton: locator(
+        '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/ConfirmButton"]',
+        '//XCUIElementTypeButton[@name="ConfirmButton"]'
+    ),
+
+    createRecordsButton: locator(
+        '//android.widget.Button[@text="Create Records"]',
+        '//XCUIElementTypeButton[@name="Create Records"]'
+    ),
+
+    closeButton: locator(
+        '//android.widget.Button[@text="Close"]',
+        '//XCUIElementTypeButton[@name="Close"]'
+    ),
+
+    earlierTab: locator(
+        '//*[@text="Earlier"]',
+        '//*[@name="Earlier"]'
+    ),
+
+    earlierCloseButton: locator(
+        '(//android.widget.Button[@text=""])[1] | //android.widget.Button[@content-desc="Close"]',
+        '(//XCUIElementTypeButton[@name=""])[1] | //XCUIElementTypeButton[@name="Close"]'
+    ),
+
+    myCommunitiesTab: locator(
+        '//*[@text="My Communities"]',
+        '//*[@name="My Communities"]'
+    ),
+}
+
+async function dumpPageSourceOnFailure(step: string): Promise<void> {
+    console.error(`Failure at ${step}`)
+    try {
+        console.log(await driver.getPageSource())
+    } catch (error) {
+        console.error('Could not get page source', error)
+    }
+}
+
+async function isVisible(element: TestBotElement): Promise<boolean> {
+    return testBot.isVisible(element).catch(() => false)
+}
+
+async function selectResident(name: string): Promise<void> {
+    if (await isVisible(residentLocator(name))) {
+        await testBot.click(residentLocator(name))
+        return
+    }
+
+    if ((process.env.PLATFORM || 'android').toLowerCase() === 'android') {
+        const resident = await $(
+            'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
+            `.scrollIntoView(new UiSelector().text("${name}"))`
+        )
+        await resident.waitForDisplayed({ timeout: 20000 })
+        await resident.click()
+        return
+    }
+
+    throw new Error(`Resident "${name}" is not visible`)
+}
+
+// Return to Communities before starting a Height scenario if the app is on an intermediate screen.
+async function ensureOnCommunitiesPage(): Promise<void> {
+    const alreadyThere = await isVisible(selectors.myCommunitiesTab)
+    if (alreadyThere) {
+        return
+    }
+
+    console.warn('Not on Communities page at test start — attempting recovery via back button')
+
+    for (let attempt = 0; attempt < 8; attempt++) {
+        if (await isVisible(selectors.myCommunitiesTab)) {
+            console.log(`Recovered to Communities page after ${attempt} back-press(es)`)
+            return
+        }
+
+        try {
+            await driver.back()
+        } catch (backErr) {
+            console.warn('driver.back() failed:', backErr)
+        }
+        await driver.pause(1000)
+    }
+
+    if (!(await isVisible(selectors.myCommunitiesTab))) {
+        await dumpPageSourceOnFailure('ensureOnCommunitiesPage - recovery failed after 8 back-presses')
+        throw new Error(
+            'Could not recover to the Communities page even after 8 back-presses. ' +
+            'The app is stuck on an unexpected screen — likely because a PREVIOUS test case ' +
+            'in this suite failed partway through and left real app state behind. ' +
+            'Check the log for the FIRST failing test case in this run, not this one.'
+        )
+    }
+}
+
+async function openHeightCareNote(residentName: string): Promise<void> {
+    await ensureOnCommunitiesPage()
+    await testBot.waitUntilVisible(selectors.myCommunitiesTab, 120000)
+
+    await selectResident(residentName)
+    console.log(`Selected resident: ${residentName}`)
+
+    await testBot.waitUntilVisible(selectors.adhocButton, 10000)
+    await testBot.click(selectors.adhocButton)
+
+    let heightVisible = await isVisible(selectors.heightText)
+
+    if (!heightVisible && await isVisible(selectors.expandAllSectionsButton)) {
+        await testBot.click(selectors.expandAllSectionsButton)
+        await driver.pause(500)
+        heightVisible = await isVisible(selectors.heightText)
+    }
+
+    for (let attempt = 0; attempt < 5 && !heightVisible; attempt++) {
+        const { width, height } = await driver.getWindowSize()
+        await driver.execute('mobile: swipeGesture', {
+            left: Math.floor(width * 0.1),
+            top: Math.floor(height * 0.35),
+            width: Math.floor(width * 0.8),
+            height: Math.floor(height * 0.5),
+            direction: 'up',
+            percent: 0.45,
+        })
+        await driver.pause(500)
+        heightVisible = await isVisible(selectors.heightText)
+    }
+
+    if (!heightVisible) {
+        throw new Error('Record height care note was not found after scrolling')
+    }
+
+    await selectHeightTile()
+
+    await testBot.waitUntilVisible(selectors.nextButton, 10000)
+    await testBot.click(selectors.nextButton)
+    console.log('Clicked Next (attempt 1)')
+    await driver.pause(1500)
+
+    let onHeightInputScreen = await isVisible(selectors.heightInput)
+
+    if (!onHeightInputScreen) {
+        console.log('Height input field not visible after Next — retrying click (attempt 2)')
+        const nextBtnRetry = await $(await (testBot as any).getLocatorTextForElement(selectors.nextButton))
+        if (await nextBtnRetry.isDisplayed().catch(() => false)) {
+            await nextBtnRetry.click()
+            await driver.pause(1500)
+            onHeightInputScreen = await isVisible(selectors.heightInput)
+        }
+    }
+
+    if (!onHeightInputScreen) {
+        await dumpPageSourceOnFailure('openHeightCareNote - Next click did not advance to height input')
+        throw new Error('Clicked Next after selecting Height, but the height input field never appeared, even after retrying')
+    }
+
+    console.log('Reached height input field')
+}
+
+async function tapElementCenter(element: any): Promise<void> {
+    const location = await element.getLocation()
+    const size = await element.getSize()
+    const x = Math.round(location.x + size.width / 2)
+    const y = Math.round(location.y + size.height / 2)
+
+    await driver.performActions([{
+        type: 'pointer',
+        id: 'height-tap',
+        parameters: { pointerType: 'touch' },
+        actions: [
+            { type: 'pointerMove', duration: 0, x, y },
+            { type: 'pointerDown', button: 0 },
+            { type: 'pause', duration: 100 },
+            { type: 'pointerUp', button: 0 },
+        ],
+    }])
+}
+
+async function selectHeightTile(): Promise<void> {
+    const heightImageXpath = await (testBot as any)
+        .getLocatorTextForElement(selectors.heightImage)
+    let heightImage = await $(heightImageXpath)
+    await heightImage.waitForDisplayed({ timeout: 10000 })
+
+    await tapElementCenter(heightImage)
+    console.log('Tapped Height tile icon (attempt 1)')
+    await driver.pause(1500)
+
+    const heightTileXpath = await (testBot as any)
+        .getLocatorTextForElement(selectors.heightSelectionButton)
+
+    if (!(await isVisible(selectors.nextButton))) {
+        console.log('Next not visible after icon tap — tapping the full Height tile')
+        const heightTile = await $(heightTileXpath)
+        if (await heightTile.isDisplayed().catch(() => false)) {
+            await tapElementCenter(heightTile)
+            await driver.pause(1500)
+        }
+    }
+
+    if (!(await isVisible(selectors.nextButton))) {
+        console.log('Next still not visible — retrying the Height icon')
+        heightImage = await $(heightImageXpath)
+        if (await heightImage.isDisplayed().catch(() => false)) {
+            await tapElementCenter(heightImage)
+            await driver.pause(1500)
+        }
+    }
+
+    if (!(await isVisible(selectors.nextButton))) {
+        await dumpPageSourceOnFailure('selectHeightTile - Next did not appear after icon and tile taps')
+        throw new Error('Height tile was tapped but Next did not appear')
+    }
+}
+
+async function setHeight(value: string): Promise<void> {
+    const xpath = await (testBot as any)
+        .getLocatorTextForElement(selectors.heightInput)
+    const input = await $(xpath)
+    await input.waitForDisplayed({ timeout: 10000 })
+    await input.click()
+    await input.clearValue()
+    await input.setValue(value)
+
+    try {
+        await driver.hideKeyboard()
+    } catch {
+        // The keyboard may already be closed on cloud devices.
+    }
+    await driver.pause(700)
+}
+
+async function clearHeight(): Promise<void> {
+    const xpath = await (testBot as any)
+        .getLocatorTextForElement(selectors.heightInput)
+    const input = await $(xpath)
+    await input.waitForDisplayed({ timeout: 10000 })
+    await input.click()
+    await input.clearValue()
+
+    try {
+        await driver.hideKeyboard()
+    } catch {
+        // The keyboard may already be closed on cloud devices.
+    }
+    await driver.pause(700)
+
+    const value = (process.env.PLATFORM || 'android').toLowerCase() === 'android'
+        ? await input.getAttribute('text')
+        : await input.getValue()
+
+    if (value !== '') {
+        throw new Error(`Height field was not blank. Current value: "${value}"`)
+    }
+}
+
+async function expectClinicalValidation(expected: boolean): Promise<void> {
+    const displayed = await isVisible(selectors.validationError)
+    if (displayed !== expected) {
+        throw new Error(
+            `Expected clinical validation to be ${expected ? 'displayed' : 'hidden'}`
+        )
+    }
+}
+
+async function expectGuidance(
+    expected: 'present' | 'none'
+): Promise<void> {
+    const lowVisible = await isVisible(selectors.lowBaselineGuidance)
+    const highVisible = await isVisible(selectors.highBaselineGuidance)
+    const guidanceVisible = lowVisible || highVisible
+
+    if (expected === 'present' && !guidanceVisible) {
+        throw new Error('Expected personalized Height guidance')
+    }
+    if (expected === 'none' && guidanceVisible) {
+        throw new Error('Personalized guidance was shown inside the baseline range')
+    }
+}
+
+const HEIGHT_BOUNDARY_CASES = [
+    { value: String(CLINICAL_MIN - 1), valid: false },
+    { value: String(CLINICAL_MIN), valid: true },
+    { value: String(CLINICAL_MIN + 1), valid: true },
+    { value: String(CLINICAL_MAX - 1), valid: true },
+    { value: String(CLINICAL_MAX), valid: true },
+    { value: String(CLINICAL_MAX + 1), valid: false },
+]
+
+async function runClinicalBoundaryAnalysis(): Promise<void> {
+    for (const testCase of HEIGHT_BOUNDARY_CASES) {
+        console.log(
+            `Testing ${testCase.valid ? 'valid' : 'invalid'} Height value: "${testCase.value}"`
+        )
+        await setHeight(testCase.value)
+        await expectClinicalValidation(!testCase.valid)
+    }
+}
+
+async function selectRequiredDuration(): Promise<void> {
+    for (let attempt = 0; attempt < 5; attempt++) {
+        const durationXpath = await (testBot as any)
+            .getLocatorTextForElement(selectors.durationOptions)
+        const durationOptions = await $$(durationXpath)
+        const visibleOptions = []
+
+        for (const option of durationOptions) {
+            if (await option.isDisplayed().catch(() => false)) {
+                visibleOptions.push(option)
+            }
+        }
+
+        if (visibleOptions.length > 0) {
+            const randomIndex = Math.floor(Math.random() * visibleOptions.length)
+            const selectedOption = visibleOptions[randomIndex]
+            const selectedDuration = await selectedOption.getText().catch(() => '')
+
+            await selectedOption.click()
+            console.log(`Selected duration: ${selectedDuration}`)
+            return
+        }
+
+        const { width, height } = await driver.getWindowSize()
+        await driver.execute('mobile: swipeGesture', {
+            left: Math.floor(width * 0.2),
+            top: Math.floor(height * 0.6),
+            width: Math.floor(width * 0.6),
+            height: Math.floor(height * 0.3),
+            direction: 'up',
+            percent: 0.5,
+        })
+        await driver.pause(750)
+    }
+
+    throw new Error('No duration option was found')
+}
+
+async function completeCareNote(): Promise<void> {
+    await selectRequiredDuration()
+
+    const confirmXpath = await (testBot as any)
+        .getLocatorTextForElement(selectors.confirmButton)
+    const confirmButton = await $(confirmXpath)
+    await confirmButton.waitForDisplayed({ timeout: 10000 })
+    await confirmButton.waitForEnabled({ timeout: 10000 })
+    await confirmButton.click()
+
+    await testBot.waitUntilVisible(selectors.createRecordsButton, 10000)
+    await testBot.click(selectors.createRecordsButton)
+
+    await testBot.waitUntilVisible(selectors.closeButton, 10000)
+    await testBot.click(selectors.closeButton)
+
+    await testBot.waitUntilVisible(selectors.earlierTab, 10000)
+    await testBot.click(selectors.earlierTab)
+
+    await testBot.waitUntilVisible(selectors.earlierCloseButton, 10000)
+    await testBot.click(selectors.earlierCloseButton)
+
+    await testBot.waitUntilVisible(selectors.myCommunitiesTab, 30000)
+}
+
+async function runStep(step: string, action: () => Promise<void>): Promise<void> {
+    try {
+        await action()
+    } catch (error) {
+        heightScenarioFailed = true
+        await dumpPageSourceOnFailure(step)
+        throw error
+    }
+}
+
+let heightScenarioFailed = false
+
+describe('Resident Area Profile - Observations - Height', () => {
+
+    beforeEach(function () {
+        if (heightScenarioFailed) {
+            this.skip()
+        }
+    })
+
+    it('Validates the accepted 50-300 range using boundary value analysis', async () => {
+        await runStep('Height boundary value analysis', async () => {
+            await openHeightCareNote(randomHeightResident())
+
+            await runClinicalBoundaryAnalysis()
+            await setHeight(VALID_HEIGHT)
+            await expectClinicalValidation(false)
+            await completeCareNote()
+        })
+    })
+
+    it('Leaves Height blank for a random resident and completes the care note', async () => {
+        await runStep('blank Height', async () => {
+            await openHeightCareNote(randomHeightResident())
+            await clearHeight()
+            await expectClinicalValidation(false)
+            await completeCareNote()
+        })
+    })
+
+    it('Rejects zero and negative Height values, then completes with a valid value', async () => {
+        await runStep('zero and negative Height', async () => {
+            await openHeightCareNote(randomHeightResident())
+
+            for (const value of ['0', '-1']) {
+                await setHeight(value)
+                await expectClinicalValidation(true)
+            }
+
+            await setHeight(VALID_HEIGHT)
+            await expectClinicalValidation(false)
+            await completeCareNote()
+        })
+    })
+
+})
