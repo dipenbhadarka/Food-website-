@@ -1,0 +1,723 @@
+import { testBot } from '../../../testbot'
+import { AndroidLocatorBuilder } from '../../../TestBot/Locators/Android/AndroidLocatorBuilder'
+import { iOSLocatorBuilder } from '../../../TestBot/Locators/iOS/iOSLocatorBuilder'
+import { TestBotElement } from '../../../TestBot/TestBotElement'
+
+const NON_BASELINE_RESIDENTS = [
+    'Ah-Na Gravy',
+    'Alan Gravy',
+    'Arturo Reyes',
+    'Benita Reyes',
+    'Brenda Brown',
+    'Charlotte Crawley',
+    'Freya Farrow',
+    'Gaz Garfield',
+    'Harriet Harper',
+    'Ingrid Ingleberry',
+    'Jo Johnson',
+    'Mack Michaels',
+    'Maureeen Moor',
+    'Rico Dawson',
+    'Robyn Partridge',
+    'Rosie Matthews',
+    'Victor Willson',
+    'Yasmine Young',
+]
+
+const NON_BASELINE_RESIDENT =
+    process.env.PULSE_NON_BASELINE_RESIDENT ||
+    NON_BASELINE_RESIDENTS[
+        Math.floor(Math.random() * NON_BASELINE_RESIDENTS.length)
+    ]
+
+const BASELINE_RESIDENT =
+    process.env.PULSE_BASELINE_RESIDENT || 'Albie Armstrong'
+
+// Clinical range
+const CLINICAL_MIN = 10
+const CLINICAL_MAX = 480
+
+// Personalised baseline range
+const BASELINE_MIN = 50
+const BASELINE_MAX = 100
+
+const VALID_PULSE = '80'
+
+function locator(
+    androidXpath: string,
+    iosXpath: string
+): TestBotElement {
+    return {
+        android: AndroidLocatorBuilder.xpath(androidXpath),
+        ios: iOSLocatorBuilder.xpath(iosXpath),
+    } as TestBotElement
+}
+
+function residentLocator(name: string): TestBotElement {
+    return locator(
+        `//android.widget.TextView[@text="${name}"]`,
+        `//XCUIElementTypeStaticText[@name="${name}"]`
+    )
+}
+
+const selectors = {
+    myCommunitiesTab: locator(
+        '//*[@text="My Communities"]',
+        '//*[@name="My Communities"]'
+    ),
+
+    adhocButton: locator(
+        '//android.widget.TextView[@text="Adhoc"]',
+        '//XCUIElementTypeStaticText[@name="Adhoc"]'
+    ),
+
+    expandAllSectionsButton: locator(
+        '//android.widget.Button[@text="\uE0A4"]',
+        '//XCUIElementTypeButton[@name=""]'
+    ),
+
+    pulseText: locator(
+        '//android.widget.TextView[@text="Pulse"]',
+        '//XCUIElementTypeStaticText[@name="Pulse"]'
+    ),
+
+    suppliedPulseImage: locator(
+        '//androidx.recyclerview.widget.RecyclerView/android.view.ViewGroup[4]/android.view.ViewGroup/android.view.ViewGroup[3]/android.view.ViewGroup/android.widget.ImageView',
+        '//XCUIElementTypeStaticText[@name="Pulse"]/preceding-sibling::XCUIElementTypeImage[1]'
+    ),
+
+    nextButton: locator(
+        '//android.widget.Button[@text="Next"]',
+        '//XCUIElementTypeButton[@name="Next"]'
+    ),
+
+    pulseInput: locator(
+        '//android.widget.EditText',
+        '//XCUIElementTypeTextField'
+    ),
+
+    validationError: locator(
+        '//android.widget.TextView[contains(@text,"Pulse should be within the specified range")]',
+        '//XCUIElementTypeStaticText[contains(@name,"Pulse should be within the specified range")]'
+    ),
+
+    lowBaselineGuidance: locator(
+        '//android.widget.TextView[contains(@text,"Pulse is lower than the specified range")]',
+        '//XCUIElementTypeStaticText[contains(@name,"Pulse is lower than the specified range")]'
+    ),
+
+    highBaselineGuidance: locator(
+        '//android.widget.TextView[contains(@text,"Pulse is higher than the specified range")]',
+        '//XCUIElementTypeStaticText[contains(@name,"Pulse is higher than the specified range")]'
+    ),
+
+    durationOptions: locator(
+        '//android.widget.TextView[contains(@text,"mins")]',
+        '//XCUIElementTypeStaticText[contains(@name,"mins")]'
+    ),
+
+    confirmButton: locator(
+        '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/ConfirmButton"]',
+        '//XCUIElementTypeButton[@name="ConfirmButton"]'
+    ),
+
+    createRecordsButton: locator(
+        '//android.widget.Button[@text="Create Records"]',
+        '//XCUIElementTypeButton[@name="Create Records"]'
+    ),
+
+    closeButton: locator(
+        '//android.widget.Button[@text="Close"]',
+        '//XCUIElementTypeButton[@name="Close"]'
+    ),
+
+    earlierTab: locator(
+        '//*[@text="Earlier"]',
+        '//*[@name="Earlier"]'
+    ),
+
+    earlierCloseButton: locator(
+        '(//android.widget.Button[@text=""])[1] | //android.widget.Button[@content-desc="Close"]',
+        '(//XCUIElementTypeButton[@name=""])[1] | //XCUIElementTypeButton[@name="Close"]'
+    ),
+}
+
+async function isVisible(
+    element: TestBotElement
+): Promise<boolean> {
+    return testBot.isVisible(element).catch(() => false)
+}
+
+async function dumpPageSourceOnFailure(
+    step: string
+): Promise<void> {
+    console.error(`Failure at ${step}`)
+
+    try {
+        console.log(await driver.getPageSource())
+    } catch (error) {
+        console.error('Could not get page source', error)
+    }
+}
+
+async function selectResident(name: string): Promise<void> {
+    const resident = residentLocator(name)
+
+    if (await isVisible(resident)) {
+        await testBot.click(resident)
+        return
+    }
+
+    if (
+        (process.env.PLATFORM || 'android').toLowerCase() ===
+        'android'
+    ) {
+        const scrollableResident = await $(
+            'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
+            `.scrollIntoView(new UiSelector().text("${name}"))`
+        )
+
+        await scrollableResident.waitForDisplayed({
+            timeout: 20000,
+        })
+
+        await scrollableResident.click()
+        return
+    }
+
+    throw new Error(`Resident "${name}" is not visible`)
+}
+
+async function tapElementCenter(element: any): Promise<void> {
+    const location = await element.getLocation()
+    const size = await element.getSize()
+
+    const x = Math.round(location.x + size.width / 2)
+    const y = Math.round(location.y + size.height / 2)
+
+    await driver.performActions([
+        {
+            type: 'pointer',
+            id: 'pulse-tap',
+            parameters: {
+                pointerType: 'touch',
+            },
+            actions: [
+                {
+                    type: 'pointerMove',
+                    duration: 0,
+                    x,
+                    y,
+                },
+                {
+                    type: 'pointerDown',
+                    button: 0,
+                },
+                {
+                    type: 'pause',
+                    duration: 100,
+                },
+                {
+                    type: 'pointerUp',
+                    button: 0,
+                },
+            ],
+        },
+    ])
+}
+
+async function selectPulseTile(): Promise<void> {
+    const pulseTextXpath = await (testBot as any)
+        .getLocatorTextForElement(selectors.pulseText)
+
+    const pulseText = await $(pulseTextXpath)
+
+    await pulseText.waitForDisplayed({
+        timeout: 10000,
+    })
+
+    await tapElementCenter(pulseText)
+    await driver.pause(1000)
+
+    if (!(await isVisible(selectors.nextButton))) {
+        const suppliedPulseXpath = await (testBot as any)
+            .getLocatorTextForElement(selectors.suppliedPulseImage)
+
+        const suppliedPulseImage = await $(
+            suppliedPulseXpath
+        )
+
+        if (
+            await suppliedPulseImage
+                .isDisplayed()
+                .catch(() => false)
+        ) {
+            await tapElementCenter(suppliedPulseImage)
+            await driver.pause(1000)
+        }
+    }
+
+    if (!(await isVisible(selectors.nextButton))) {
+        throw new Error(
+            'Pulse tile was tapped but Next did not appear'
+        )
+    }
+}
+
+async function openPulseCareNote(
+    residentName: string
+): Promise<void> {
+    await testBot.waitUntilVisible(
+        selectors.myCommunitiesTab,
+        120000
+    )
+
+    await selectResident(residentName)
+
+    console.log(`Selected resident: ${residentName}`)
+
+    await testBot.waitUntilVisible(
+        selectors.adhocButton,
+        10000
+    )
+
+    await testBot.click(selectors.adhocButton)
+
+    let pulseVisible = await isVisible(selectors.pulseText)
+
+    if (
+        !pulseVisible &&
+        await isVisible(selectors.expandAllSectionsButton)
+    ) {
+        await testBot.click(
+            selectors.expandAllSectionsButton
+        )
+
+        await driver.pause(500)
+
+        pulseVisible = await isVisible(selectors.pulseText)
+    }
+
+    if (!pulseVisible) {
+        const pulse = await $(
+            'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
+            '.scrollIntoView(new UiSelector().text("Pulse"))'
+        )
+
+        await pulse.waitForDisplayed({
+            timeout: 10000,
+        })
+    }
+
+    await selectPulseTile()
+
+    await testBot.waitUntilVisible(
+        selectors.nextButton,
+        10000
+    )
+
+    await testBot.click(selectors.nextButton)
+
+    await testBot.waitUntilVisible(
+        selectors.pulseInput,
+        10000
+    )
+}
+
+async function setPulse(value: string): Promise<void> {
+    const pulseInputXpath = await (testBot as any)
+        .getLocatorTextForElement(selectors.pulseInput)
+
+    const pulseInput = await $(pulseInputXpath)
+
+    await pulseInput.waitForDisplayed({
+        timeout: 10000,
+    })
+
+    await pulseInput.click()
+    await pulseInput.clearValue()
+    await pulseInput.setValue(value)
+
+    try {
+        await driver.hideKeyboard()
+    } catch {
+        // Keyboard may already be closed.
+    }
+
+    await driver.pause(700)
+}
+
+async function clearPulse(): Promise<void> {
+    const pulseInputXpath = await (testBot as any)
+        .getLocatorTextForElement(selectors.pulseInput)
+
+    const pulseInput = await $(pulseInputXpath)
+
+    await pulseInput.waitForDisplayed({
+        timeout: 10000,
+    })
+
+    await pulseInput.click()
+    await pulseInput.clearValue()
+
+    try {
+        await driver.hideKeyboard()
+    } catch {
+        // Keyboard may already be closed.
+    }
+
+    await driver.pause(700)
+
+    const value =
+        (process.env.PLATFORM || 'android').toLowerCase() ===
+        'android'
+            ? await pulseInput.getAttribute('text')
+            : await pulseInput.getValue()
+
+    if (value !== '') {
+        throw new Error(
+            `Pulse field was not blank. Current value: "${value}"`
+        )
+    }
+}
+
+async function expectClinicalValidation(
+    expected: boolean
+): Promise<void> {
+    const displayed = await isVisible(
+        selectors.validationError
+    )
+
+    if (displayed !== expected) {
+        throw new Error(
+            `Expected clinical validation to be ${
+                expected ? 'displayed' : 'hidden'
+            }`
+        )
+    }
+}
+
+async function expectGuidance(
+    expected: 'present' | 'none'
+): Promise<void> {
+    const lowVisible = await isVisible(
+        selectors.lowBaselineGuidance
+    )
+
+    const highVisible = await isVisible(
+        selectors.highBaselineGuidance
+    )
+
+    const guidanceVisible = lowVisible || highVisible
+
+    if (
+        expected === 'present' &&
+        !guidanceVisible
+    ) {
+        throw new Error(
+            'Expected personalised Pulse guidance'
+        )
+    }
+
+    if (
+        expected === 'none' &&
+        guidanceVisible
+    ) {
+        throw new Error(
+            'Personalised Pulse guidance was shown inside the baseline range'
+        )
+    }
+}
+
+async function runClinicalBoundaryAnalysis(): Promise<void> {
+    for (const value of [
+        String(CLINICAL_MIN - 1),
+        String(CLINICAL_MAX + 1),
+    ]) {
+        await setPulse(value)
+        await expectClinicalValidation(true)
+    }
+}
+
+async function selectRequiredDuration(): Promise<void> {
+    for (let attempt = 0; attempt < 5; attempt++) {
+        const durationXpath = await (testBot as any)
+            .getLocatorTextForElement(
+                selectors.durationOptions
+            )
+        const durationOptions = await $$(durationXpath)
+        const visibleOptions = []
+
+        for (const option of durationOptions) {
+            if (
+                await option
+                    .isDisplayed()
+                    .catch(() => false)
+            ) {
+                visibleOptions.push(option)
+            }
+        }
+
+        if (visibleOptions.length > 0) {
+            const randomIndex = Math.floor(
+                Math.random() * visibleOptions.length
+            )
+            const selectedOption =
+                visibleOptions[randomIndex]
+            const selectedDuration = await selectedOption
+                .getText()
+                .catch(() => '')
+
+            await selectedOption.click()
+            console.log(
+                `Selected duration: ${selectedDuration}`
+            )
+            return
+        }
+
+        const { width, height } =
+            await driver.getWindowSize()
+
+        await driver.execute('mobile: swipeGesture', {
+            left: Math.floor(width * 0.2),
+            top: Math.floor(height * 0.6),
+            width: Math.floor(width * 0.6),
+            height: Math.floor(height * 0.3),
+            direction: 'up',
+            percent: 0.5,
+        })
+
+        await driver.pause(750)
+    }
+
+    throw new Error(
+        'No duration option was found'
+    )
+}
+
+async function completeCareNote(): Promise<void> {
+    await selectRequiredDuration()
+
+    const confirmXpath = await (testBot as any)
+        .getLocatorTextForElement(selectors.confirmButton)
+
+    const confirmButton = await $(confirmXpath)
+
+    await confirmButton.waitForDisplayed({
+        timeout: 10000,
+    })
+
+    await confirmButton.waitForEnabled({
+        timeout: 10000,
+    })
+
+    await confirmButton.click()
+
+    await testBot.waitUntilVisible(
+        selectors.createRecordsButton,
+        10000
+    )
+
+    await testBot.click(selectors.createRecordsButton)
+
+    await testBot.waitUntilVisible(
+        selectors.closeButton,
+        10000
+    )
+
+    await testBot.click(selectors.closeButton)
+
+    await testBot.waitUntilVisible(
+        selectors.earlierTab,
+        10000
+    )
+
+    await testBot.click(selectors.earlierTab)
+
+    await testBot.waitUntilVisible(
+        selectors.earlierCloseButton,
+        10000
+    )
+
+    await testBot.click(
+        selectors.earlierCloseButton
+    )
+
+    await testBot.waitUntilVisible(
+        selectors.myCommunitiesTab,
+        30000
+    )
+}
+
+async function runStep(
+    step: string,
+    action: () => Promise<void>
+): Promise<void> {
+    try {
+        await action()
+    } catch (error) {
+        await dumpPageSourceOnFailure(step)
+        throw error
+    }
+}
+
+describe(
+    'Resident Area Profile - Observations - Pulse',
+    () => {
+        it(
+            'Validates boundaries, re-enters baseline values and completes the care note',
+            async () => {
+                await runStep(
+                    'baseline Pulse',
+                    async () => {
+                        await openPulseCareNote(
+                            BASELINE_RESIDENT
+                        )
+
+                        await runClinicalBoundaryAnalysis()
+
+                        await setPulse(
+                            String(BASELINE_MIN - 1)
+                        )
+
+                        await expectClinicalValidation(
+                            false
+                        )
+
+                        await expectGuidance('present')
+
+                        await setPulse(
+                            String(BASELINE_MAX + 1)
+                        )
+
+                        await expectClinicalValidation(
+                            false
+                        )
+
+                        await expectGuidance('present')
+
+                        await setPulse(
+                            String(BASELINE_MIN)
+                        )
+
+                        await expectClinicalValidation(
+                            false
+                        )
+
+                        await expectGuidance('none')
+
+                        await setPulse(
+                            String(BASELINE_MAX)
+                        )
+
+                        await expectClinicalValidation(
+                            false
+                        )
+
+                        await expectGuidance('none')
+
+                        await setPulse(VALID_PULSE)
+
+                        await expectClinicalValidation(
+                            false
+                        )
+
+                        await expectGuidance('none')
+
+                        await completeCareNote()
+                    }
+                )
+            }
+        )
+
+        it(
+            'Validates the clinical range for a non-baseline resident',
+            async () => {
+                await runStep(
+                    'non-baseline Pulse range',
+                    async () => {
+                        await openPulseCareNote(
+                            NON_BASELINE_RESIDENT
+                        )
+
+                        await runClinicalBoundaryAnalysis()
+
+                        for (const value of [
+                            '15',
+                            '250',
+                            '470',
+                        ]) {
+                            await setPulse(value)
+                            await expectClinicalValidation(
+                                false
+                            )
+                            await expectGuidance('none')
+                        }
+
+                        await setPulse(VALID_PULSE)
+
+                        await expectClinicalValidation(
+                            false
+                        )
+
+                        await completeCareNote()
+                    }
+                )
+            }
+        )
+
+        it(
+            'Leaves Pulse blank for a new non-baseline resident',
+            async () => {
+                await runStep(
+                    'blank non-baseline Pulse',
+                    async () => {
+                        await openPulseCareNote(
+                            NON_BASELINE_RESIDENT
+                        )
+
+                        await clearPulse()
+
+                        await expectClinicalValidation(
+                            false
+                        )
+
+                        await completeCareNote()
+                    }
+                )
+            }
+        )
+
+        it(
+            'Rejects zero and negative Pulse values',
+            async () => {
+                await runStep(
+                    'zero and negative Pulse',
+                    async () => {
+                        await openPulseCareNote(
+                            NON_BASELINE_RESIDENT
+                        )
+
+                        for (const value of [
+                            '0',
+                            '-1',
+                        ]) {
+                            await setPulse(value)
+                            await expectClinicalValidation(
+                                true
+                            )
+                        }
+
+                        await setPulse(VALID_PULSE)
+
+                        await expectClinicalValidation(
+                            false
+                        )
+
+                        await completeCareNote()
+                    }
+                )
+            }
+        )
+    }
+)
