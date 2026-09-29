@@ -1,0 +1,256 @@
+// ─────────────────────────────────────────────
+// TEST CASE 51902 - Unsuccessful enrolment - Invalid Password
+// Prerequisite: This is to test the unsuccessful enrolment of a
+// device due to entering incorrect log in details.
+//
+// Steps:
+//  1. Select United Kingdom, Click Continue                  -> Username screen
+//     (app lands directly on Region Selection on BrowserStack,
+//     no Info/Enrol Device tap needed — see step removal note below)
+//  2. Enter valid username, Click Continue                   -> Terms screen
+//  3. Click Continue                                          -> Password screen
+//  4. Enter invalid password, Click Login                     -> User is NOT logged in
+//                                                                Message: 'Invalid username or password'
+//
+// NOTE: Modelled directly on test/specs/enrolment.e2e.ts (Steps 0-6).
+// Reuses the same selector patterns/locators. Please verify the
+// `invalidCredentialsMessage` locator against the real app before
+// merging - the exact resource-id/text was not confirmed in the
+// provided locator list.
+//
+// VERIFIED 2026-09-24: original Step 1 (Info icon -> Enrol Device tap)
+// removed after a BrowserStack run showed the app already lands on
+// "Select Region" with no Info icon present, causing a false 20s
+// timeout. Full suite now passes 4/4 on BrowserStack.
+// ─────────────────────────────────────────────
+
+import { testBot } from '../../../testbot'
+import { AndroidLocatorBuilder } from '../../../TestBot/Locators/Android/AndroidLocatorBuilder'
+import { iOSLocatorBuilder } from '../../../TestBot/Locators/iOS/iOSLocatorBuilder'
+import { TestBotElement } from '../../../TestBot/TestBotElement'
+
+const isLocal = process.env.RUN_MODE === 'local'
+console.log(`Running in ${isLocal ? 'LOCAL PHYSICAL DEVICE' : 'BROWSERSTACK CLOUD'} mode`)
+
+// ─────────────────────────────────────────────
+// Test Data
+// ─────────────────────────────────────────────
+const USERNAME = process.env.TEST_USERNAME || ''
+const INVALID_PASSWORD = process.env.TEST_INVALID_PASSWORD || ''
+
+// ─────────────────────────────────────────────
+// Selectors
+// ─────────────────────────────────────────────
+const selectors = {
+    infoButtonIcon: {
+        android: AndroidLocatorBuilder.xpath('//android.widget.TextView[@text=""]'),
+        ios: iOSLocatorBuilder.id('InfoButton'),
+    } as TestBotElement,
+
+    enrollDeviceButton: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/EnrollDeviceButton"]'
+        ),
+        ios: iOSLocatorBuilder.id('EnrollDeviceButton'),
+    } as TestBotElement,
+
+    selectRegionDropdown: {
+        android: AndroidLocatorBuilder.xpath('//android.widget.TextView[@text="Select Region"]'),
+        ios: iOSLocatorBuilder.id('SelectRegion'),
+    } as TestBotElement,
+
+    pickerPopupSearchEntry: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.EditText[@resource-id="com.personcentredsoftware.care.delivery:id/PickerPopupSearchEntry"]'
+        ),
+        ios: iOSLocatorBuilder.id('PickerPopupSearchEntry'),
+    } as TestBotElement,
+
+    optionUnitedKingdom: {
+        android: AndroidLocatorBuilder.xpath('//android.widget.TextView[@text="United Kingdom"]'),
+        ios: iOSLocatorBuilder.xpath('//XCUIElementTypeStaticText[@name="United Kingdom"]'),
+    } as TestBotElement,
+
+    triggerEnrolLoginButton: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/LoginButton"]'
+        ),
+        ios: iOSLocatorBuilder.id('LoginButton'),
+    } as TestBotElement,
+
+    usernameFieldLocal: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.view.View[@resource-id="AccountLogin"]/android.view.View'
+        ),
+        ios: iOSLocatorBuilder.id('AccountLogin'),
+    } as TestBotElement,
+
+    usernameFieldBrowserStack: {
+        android: AndroidLocatorBuilder.xpath('//android.widget.EditText[@resource-id="Username"]'),
+        ios: iOSLocatorBuilder.id('AccountLogin'),
+    } as TestBotElement,
+
+    nextButton: {
+        android: AndroidLocatorBuilder.xpath('//android.widget.Button[@resource-id="NextButton"]'),
+        ios: iOSLocatorBuilder.id('Next'),
+    } as TestBotElement,
+
+    continueButton: {
+        android: AndroidLocatorBuilder.xpath('//android.widget.Button[@resource-id="ContinueButton"]'),
+        ios: iOSLocatorBuilder.id('ContinueButton'),
+    } as TestBotElement,
+
+    passwordField: {
+        android: AndroidLocatorBuilder.xpath('//android.widget.EditText[@resource-id="Password"]'),
+        ios: iOSLocatorBuilder.id('Password'),
+    } as TestBotElement,
+
+    identityLoginButton: {
+        android: AndroidLocatorBuilder.xpath('//android.widget.Button[@resource-id="LoginButton"]'),
+        ios: iOSLocatorBuilder.id('LoginButton'),
+    } as TestBotElement,
+
+    // TODO: verify exact resource-id/text once available in the app;
+    // falls back to a contains() match on the expected message text.
+    invalidCredentialsMessage: {
+        android: AndroidLocatorBuilder.xpath(
+            '//android.widget.TextView[contains(@text,"Invalid username or password") or contains(@text,"invalid username or password")]'
+        ),
+        ios: iOSLocatorBuilder.xpath(
+            '//XCUIElementTypeStaticText[contains(@name,"Invalid username or password")]'
+        ),
+    } as TestBotElement,
+}
+
+const usernameField: TestBotElement = isLocal ? selectors.usernameFieldLocal : selectors.usernameFieldBrowserStack
+
+async function dumpPageSourceOnFailure(stepLabel: string): Promise<void> {
+    console.error(`Failure at ${stepLabel} — dumping page source`)
+    try {
+        const pageSource = await driver.getPageSource()
+        console.log(`─────────── PAGE SOURCE: ${stepLabel} ───────────`)
+        console.log(pageSource)
+    } catch (srcErr) {
+        console.warn('getPageSource failed (session may be dead):', srcErr)
+    }
+}
+
+async function submitUsername(): Promise<void> {
+    const nextButtonCandidates = [
+        '//android.widget.Button[contains(@text,"Next")]',
+        '//android.widget.Button[contains(@text,"Continue")]',
+        '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/ContinueButton"]',
+        '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/NextButton"]',
+        '//*[contains(@text,"Next")]',
+    ]
+
+    for (const xpath of nextButtonCandidates) {
+        const candidate = await $(xpath)
+        if (await candidate.isExisting().catch(() => false)) {
+            await candidate.click()
+            return
+        }
+    }
+
+    for (const action of ['next', 'go', 'done']) {
+        try {
+            await driver.execute('mobile: performEditorAction', { action })
+            await driver.pause(2000)
+            return
+        } catch (err) {
+            console.warn(`performEditorAction "${action}" failed:`, err)
+        }
+    }
+
+    throw new Error('Could not submit username with any supported method')
+}
+
+async function selectFromSearchPopup(
+    dropdownTrigger: TestBotElement,
+    optionLocator: TestBotElement,
+    optionText: string
+): Promise<void> {
+    await testBot.click(dropdownTrigger)
+    await driver.pause(1500)
+
+    let optionVisible = await testBot.isVisible(optionLocator).catch(() => false)
+    if (!optionVisible) {
+        const searchVisible = await testBot.isVisible(selectors.pickerPopupSearchEntry).catch(() => false)
+        if (searchVisible) {
+            await testBot.click(selectors.pickerPopupSearchEntry)
+            await testBot.enterText(selectors.pickerPopupSearchEntry, optionText, false)
+            await driver.pause(1000)
+            optionVisible = await testBot.isVisible(optionLocator).catch(() => false)
+        }
+    }
+
+    if (!optionVisible) {
+        await dumpPageSourceOnFailure(`selectFromSearchPopup - "${optionText}" not found`)
+        throw new Error(`Could not find "${optionText}" in the search popup`)
+    }
+
+    await testBot.click(optionLocator)
+    await driver.pause(1000)
+}
+
+// ─────────────────────────────────────────────
+// Suite — Unsuccessful Enrolment: Invalid Password (TC 51902)
+// ─────────────────────────────────────────────
+describe('Care Delivery - Unsuccessful Enrolment - Invalid Password', () => {
+
+    it('Step 1 - Select United Kingdom and Continue to Username screen', async () => {
+        await selectFromSearchPopup(selectors.selectRegionDropdown, selectors.optionUnitedKingdom, 'United Kingdom')
+        await testBot.waitUntilVisible(selectors.triggerEnrolLoginButton, 10000)
+        await testBot.click(selectors.triggerEnrolLoginButton)
+        await testBot.waitUntilVisible(usernameField, 20000)
+    })
+
+    it('Step 2 - Enter valid username and Continue to Terms screen', async () => {
+        await testBot.click(usernameField)
+        await testBot.enterText(usernameField, USERNAME, false)
+        await driver.pause(1500)
+        try {
+            await driver.hideKeyboard()
+        } catch (err) {
+            console.warn('hideKeyboard before username submit failed:', err)
+        }
+        await submitUsername()
+        await driver.pause(isLocal ? 3000 : 4000)
+        await testBot.waitUntilVisible(selectors.continueButton, 20000)
+    })
+
+    it('Step 3 - Click Continue and land on Password screen', async () => {
+        await testBot.click(selectors.continueButton)
+        await driver.pause(3000)
+        await testBot.waitUntilVisible(selectors.passwordField, 20000)
+    })
+
+    it('Step 4 - Enter invalid password, click Login and verify "Invalid username or password" message is shown', async () => {
+        await testBot.click(selectors.passwordField)
+        await testBot.enterText(selectors.passwordField, INVALID_PASSWORD, false)
+        await driver.pause(1500)
+        try {
+            await driver.hideKeyboard()
+        } catch (err) {
+            console.warn('hideKeyboard failed or keyboard already hidden:', err)
+        }
+
+        await testBot.waitUntilVisible(selectors.identityLoginButton, 10000)
+        await testBot.click(selectors.identityLoginButton)
+        await driver.pause(3000)
+
+        try {
+            await testBot.waitUntilVisible(selectors.invalidCredentialsMessage, 15000)
+        } catch (err) {
+            await dumpPageSourceOnFailure('Step 4 (Invalid username or password message)')
+            throw err
+        }
+
+        const isVisible = await testBot.isVisible(selectors.invalidCredentialsMessage)
+        expect(isVisible).toBe(true)
+
+        // User remains unauthenticated — should still be on the password screen
+        const stillOnPasswordScreen = await testBot.isVisible(selectors.passwordField).catch(() => false)
+        expect(stillOnPasswordScreen).toBe(true)
+    })
+})
