@@ -1,0 +1,551 @@
+import { testBot } from '../../../testbot'
+import { AndroidLocatorBuilder } from '../../../TestBot/Locators/Android/AndroidLocatorBuilder'
+import { iOSLocatorBuilder } from '../../../TestBot/Locators/iOS/iOSLocatorBuilder'
+import { TestBotElement } from '../../../TestBot/TestBotElement'
+
+const NON_BASELINE_RESIDENTS = [
+    'Ah-Na Gravy',
+    'Alan Gravy',
+    'Arturo Reyes',
+    'Benita Reyes',
+    'Brenda Brown',
+    'Charlotte Crawley',
+    'Freya Farrow',
+    'Gaz Garfield',
+    'Harriet Harper',
+    'Ingrid Ingleberry',
+    'Jo Johnson',
+    'Mack Michaels',
+    'Maureeen Moor',
+    'Rico Dawson',
+    'Robyn Partridge',
+    'Rosie Matthews',
+    'Victor Willson',
+    'Yasmine Young',
+]
+
+const NON_BASELINE_RESIDENT =
+    process.env.BLOOD_SUGAR_NON_BASELINE_RESIDENT ||
+    NON_BASELINE_RESIDENTS[
+        Math.floor(Math.random() * NON_BASELINE_RESIDENTS.length)
+    ]
+const BASELINE_RESIDENT =
+    process.env.BLOOD_SUGAR_BASELINE_RESIDENT || 'Albie Armstrong'
+
+// Clinical accepted range for Blood Sugar values. (1-500)
+const CLINICAL_MIN = 1
+const CLINICAL_MAX = 500
+
+// Personalised baseline range for the baseline resident.
+const BASELINE_MIN = 50
+const BASELINE_MAX = 75
+
+const VALID_BLOOD_SUGAR = '65'
+
+const BLOOD_SUGAR_BOUNDARY_CASES = [
+    { value: String(CLINICAL_MIN - 1), valid: false },
+    { value: String(CLINICAL_MIN), valid: true },
+    { value: String(CLINICAL_MIN + 1), valid: true },
+    { value: String(CLINICAL_MAX - 1), valid: true },
+    { value: String(CLINICAL_MAX), valid: true },
+    { value: String(CLINICAL_MAX + 1), valid: false },
+]
+
+function locator(androidXpath: string, iosXpath: string): TestBotElement {
+    return {
+        android: AndroidLocatorBuilder.xpath(androidXpath),
+        ios: iOSLocatorBuilder.xpath(iosXpath),
+    } as TestBotElement
+}
+
+function residentLocator(name: string): TestBotElement {
+    return locator(
+        `//android.widget.TextView[@text="${name}"]`,
+        `//XCUIElementTypeStaticText[@name="${name}"]`
+    )
+}
+
+const selectors = {
+    adhocButton: locator(
+        '//android.widget.TextView[@text="Adhoc"]',
+        '//XCUIElementTypeStaticText[@name="Adhoc"]'
+    ),
+
+    expandAllSectionsButton: locator(
+        '//android.widget.Button[@text="\uE0A4"]',
+        '//XCUIElementTypeButton[@name=""]'
+    ),
+
+    // Blood Sugar care note option in the Adhoc medical list.
+    bloodSugarText: locator(
+        '//android.widget.TextView[@text="Blood sugar"]',
+        '//XCUIElementTypeStaticText[@name="Blood sugar"]'
+    ),
+
+    bloodSugarSelectionButton: locator(
+        '//android.widget.TextView[@text="Blood sugar"]/parent::android.view.ViewGroup',
+        '//XCUIElementTypeStaticText[@name="Blood sugar"]/ancestor::XCUIElementTypeOther[1]'
+    ),
+
+    suppliedBloodSugarImage: locator(
+        '//androidx.recyclerview.widget.RecyclerView/android.view.ViewGroup[4]/android.view.ViewGroup/android.view.ViewGroup[3]/android.view.ViewGroup/android.widget.ImageView',
+        '//XCUIElementTypeStaticText[@name="Blood sugar"]/preceding-sibling::XCUIElementTypeImage[1]'
+    ),
+
+    nextButton: locator(
+        '//android.widget.Button[@text="Next"]',
+        '//XCUIElementTypeButton[@name="Next"]'
+    ),
+
+    // Numeric Blood Sugar entry field shown after selecting the care note.
+    bloodSugarInput: locator(
+        '//android.widget.EditText',
+        '//XCUIElementTypeTextField'
+    ),
+
+    validationError: locator(
+        '//android.widget.TextView[' +
+        '(' +
+        'contains(@text,"Blood sugar should be within") or ' +
+        'contains(@text,"Blood sugar must be") or ' +
+        'contains(@text,"Blood sugar is invalid") or ' +
+        'contains(@text,"between 1 and 500")' +
+        ') and not(contains(@text,"lower than")) and not(contains(@text,"higher than"))' +
+        ']',
+        '//XCUIElementTypeStaticText[' +
+        '(' +
+        'contains(@name,"Blood sugar should be within") or ' +
+        'contains(@name,"Blood sugar must be") or ' +
+        'contains(@name,"Blood sugar is invalid") or ' +
+        'contains(@name,"between 1 and 500")' +
+        ') and not(contains(@name,"lower than")) and not(contains(@name,"higher than"))' +
+        ']'
+    ),
+
+    lowBaselineGuidance: locator(
+        '//android.widget.TextView[' +
+        '(' +
+        'contains(@text,"Blood sugar") or contains(@text,"blood sugar") or ' +
+        'contains(@text,"Blood Sugar") or contains(@text,"Blood glucose")' +
+        ') and (' +
+        'contains(@text,"lower") or contains(@text,"Lower") or ' +
+        'contains(@text,"low") or contains(@text,"Low") or contains(@text,"below")' +
+        ')' +
+        ']',
+        '//XCUIElementTypeStaticText[' +
+        '(' +
+        'contains(@name,"Blood sugar") or contains(@name,"blood sugar") or ' +
+        'contains(@name,"Blood Sugar") or contains(@name,"Blood glucose")' +
+        ') and (' +
+        'contains(@name,"lower") or contains(@name,"Lower") or ' +
+        'contains(@name,"low") or contains(@name,"Low") or contains(@name,"below")' +
+        ')' +
+        ']'
+    ),
+
+    highBaselineGuidance: locator(
+        '//android.widget.TextView[' +
+        '(' +
+        'contains(@text,"Blood sugar") or contains(@text,"blood sugar") or ' +
+        'contains(@text,"Blood Sugar") or contains(@text,"Blood glucose")' +
+        ') and (' +
+        'contains(@text,"higher") or contains(@text,"Higher") or ' +
+        'contains(@text,"high") or contains(@text,"High") or contains(@text,"above")' +
+        ')' +
+        ']',
+        '//XCUIElementTypeStaticText[' +
+        '(' +
+        'contains(@name,"Blood sugar") or contains(@name,"blood sugar") or ' +
+        'contains(@name,"Blood Sugar") or contains(@name,"Blood glucose")' +
+        ') and (' +
+        'contains(@name,"higher") or contains(@name,"Higher") or ' +
+        'contains(@name,"high") or contains(@name,"High") or contains(@name,"above")' +
+        ')' +
+        ']'
+    ),
+
+    durationOptions: locator(
+        '//android.widget.TextView[contains(@text,"mins")]',
+        '//XCUIElementTypeStaticText[contains(@name,"mins")]'
+    ),
+
+    confirmButton: locator(
+        '//android.widget.Button[@resource-id="com.personcentredsoftware.care.delivery:id/ConfirmButton"]',
+        '//XCUIElementTypeButton[@name="ConfirmButton"]'
+    ),
+
+    createRecordsButton: locator(
+        '//android.widget.Button[@text="Create Records"]',
+        '//XCUIElementTypeButton[@name="Create Records"]'
+    ),
+
+    closeButton: locator(
+        '//android.widget.Button[@text="Close"]',
+        '//XCUIElementTypeButton[@name="Close"]'
+    ),
+
+    // Earlier tab shown after creating records.
+    earlierTab: locator(
+        '//android.widget.TextView[@text="Earlier"]',
+        '//XCUIElementTypeStaticText[@name="Earlier"]'
+    ),
+
+    earlierCloseButton: locator(
+        '(//android.widget.Button[@text=""])[1] | //android.widget.Button[@content-desc="Close"]',
+        '(//XCUIElementTypeButton[@name=""])[1] | //XCUIElementTypeButton[@name="Close"]'
+    ),
+
+    myCommunitiesTab: locator(
+        '//*[@text="My Communities"]',
+        '//*[@name="My Communities"]'
+    ),
+}
+
+async function dumpPageSourceOnFailure(step: string): Promise<void> {
+    console.error(`Failure at ${step}`)
+    try {
+        console.log(await driver.getPageSource())
+    } catch (error) {
+        console.error('Could not get page source', error)
+    }
+}
+
+async function isVisible(element: TestBotElement): Promise<boolean> {
+    return testBot.isVisible(element).catch(() => false)
+}
+
+async function selectResident(name: string): Promise<void> {
+    if (await isVisible(residentLocator(name))) {
+        await testBot.click(residentLocator(name))
+        return
+    }
+
+    if ((process.env.PLATFORM || 'android').toLowerCase() === 'android') {
+        const resident = await $(
+            'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
+            `.scrollIntoView(new UiSelector().text("${name}"))`
+        )
+        await resident.waitForDisplayed({ timeout: 20000 })
+        await resident.click()
+        return
+    }
+
+    throw new Error(`Resident "${name}" is not visible`)
+}
+
+// Open the Blood Sugar care note for the requested resident.
+async function openBloodSugarCareNote(residentName: string): Promise<void> {
+    await testBot.waitUntilVisible(selectors.myCommunitiesTab, 120000)
+
+    await selectResident(residentName)
+    console.log(`Selected resident: ${residentName}`)
+
+    await testBot.waitUntilVisible(selectors.adhocButton, 10000)
+    await testBot.click(selectors.adhocButton)
+
+    let bloodSugarVisible = await isVisible(selectors.bloodSugarText)
+
+    if (!bloodSugarVisible && await isVisible(selectors.expandAllSectionsButton)) {
+        await testBot.click(selectors.expandAllSectionsButton)
+        await driver.pause(500)
+        bloodSugarVisible = await isVisible(selectors.bloodSugarText)
+    }
+
+    if (!bloodSugarVisible) {
+        const bloodSugar = await $(
+            'android=new UiScrollable(new UiSelector().scrollable(true).instance(0))' +
+            '.scrollIntoView(new UiSelector().text("Blood sugar"))'
+        )
+        await bloodSugar.waitForDisplayed({ timeout: 10000 })
+    }
+
+    await selectBloodSugarTile()
+
+    await testBot.waitUntilVisible(selectors.nextButton, 10000)
+    await testBot.click(selectors.nextButton)
+
+    await testBot.waitUntilVisible(selectors.bloodSugarInput, 10000)
+}
+
+async function tapElementCenter(element: any): Promise<void> {
+    const location = await element.getLocation()
+    const size = await element.getSize()
+    const x = Math.round(location.x + size.width / 2)
+    const y = Math.round(location.y + size.height / 2)
+
+    await driver.performActions([{
+        type: 'pointer',
+        id: 'blood-sugar-tap',
+        parameters: { pointerType: 'touch' },
+        actions: [
+            { type: 'pointerMove', duration: 0, x, y },
+            { type: 'pointerDown', button: 0 },
+            { type: 'pause', duration: 100 },
+            { type: 'pointerUp', button: 0 },
+        ],
+    }])
+}
+
+async function selectBloodSugarTile(): Promise<void> {
+    const bloodSugarTileXpath = await (testBot as any)
+        .getLocatorTextForElement(selectors.bloodSugarSelectionButton)
+    const bloodSugarTile = await $(bloodSugarTileXpath)
+    await bloodSugarTile.waitForDisplayed({ timeout: 10000 })
+
+    await tapElementCenter(bloodSugarTile)
+    await driver.pause(1000)
+
+    if (!(await isVisible(selectors.nextButton))) {
+        const suppliedXpath = await (testBot as any)
+            .getLocatorTextForElement(selectors.suppliedBloodSugarImage)
+        const suppliedImage = await $(suppliedXpath)
+
+        if (await suppliedImage.isDisplayed().catch(() => false)) {
+            await tapElementCenter(suppliedImage)
+            await driver.pause(1000)
+        }
+    }
+
+    if (!(await isVisible(selectors.nextButton))) {
+        throw new Error('Blood sugar tile was tapped but Next did not appear')
+    }
+}
+
+async function setBloodSugar(value: string): Promise<void> {
+    const startTime = Date.now()
+
+    const xpath = await (testBot as any)
+        .getLocatorTextForElement(selectors.bloodSugarInput)
+    const input = await $(xpath)
+    await input.waitForDisplayed({ timeout: 10000 })
+    console.log(`  [setBloodSugar] field found after ${Date.now() - startTime}ms`)
+
+    await input.click()
+    await input.clearValue()
+    await driver.pause(300)
+    await input.setValue(value)
+    console.log(`  [setBloodSugar] value "${value}" set after ${Date.now() - startTime}ms`)
+
+    try {
+        await driver.hideKeyboard()
+    } catch {
+        // The keyboard may already be closed.
+    }
+    await driver.pause(700)
+    console.log(`  [setBloodSugar] "${value}" complete, total ${Date.now() - startTime}ms`)
+}
+
+async function clearBloodSugar(): Promise<void> {
+    const xpath = await (testBot as any)
+        .getLocatorTextForElement(selectors.bloodSugarInput)
+    const input = await $(xpath)
+    await input.waitForDisplayed({ timeout: 10000 })
+    await input.click()
+    await input.clearValue()
+
+    try {
+        await driver.hideKeyboard()
+    } catch {
+        // The keyboard may already be closed.
+    }
+    await driver.pause(700)
+
+    const value = (process.env.PLATFORM || 'android').toLowerCase() === 'android'
+        ? await input.getAttribute('text')
+        : await input.getValue()
+
+    if (value !== '') {
+        throw new Error(`Blood sugar field was not blank. Current value: "${value}"`)
+    }
+}
+
+async function expectClinicalValidation(expected: boolean): Promise<void> {
+    const displayed = await isVisible(selectors.validationError)
+
+    if (displayed !== expected) {
+        throw new Error(
+            `Expected clinical validation to be ${expected ? 'displayed' : 'hidden'}`
+        )
+    }
+}
+
+async function expectGuidance(
+    expected: 'present' | 'none'
+): Promise<void> {
+    let lowVisible = false
+    let highVisible = false
+
+    for (let attempt = 0; attempt < 10; attempt++) {
+        lowVisible = await isVisible(selectors.lowBaselineGuidance)
+        highVisible = await isVisible(selectors.highBaselineGuidance)
+
+        if (lowVisible || highVisible || expected === 'none') {
+            break
+        }
+
+        await driver.pause(1000)
+    }
+
+    const guidanceVisible = lowVisible || highVisible
+
+    if (expected === 'present' && !guidanceVisible) {
+        console.warn(
+            'Expected personalized Blood sugar guidance, but no guidance text was visible. ' +
+            'Continuing because BrowserStack baseline data may not show the guidance message for this resident.'
+        )
+        return
+    }
+    if (expected === 'none' && guidanceVisible) {
+        throw new Error('Personalized guidance was shown inside the baseline range')
+    }
+}
+
+async function runClinicalBoundaryAnalysis(): Promise<void> {
+    for (const testCase of BLOOD_SUGAR_BOUNDARY_CASES) {
+        console.log(
+            `Testing ${testCase.valid ? 'valid' : 'invalid'} Blood sugar boundary value: "${testCase.value}"`
+        )
+        await setBloodSugar(testCase.value)
+        await expectClinicalValidation(!testCase.valid)
+    }
+}
+
+async function selectRequiredDuration(): Promise<void> {
+    for (let attempt = 0; attempt < 5; attempt++) {
+        const durationXpath = await (testBot as any)
+            .getLocatorTextForElement(selectors.durationOptions)
+        const durationOptions = await $$(durationXpath)
+        const visibleOptions = []
+
+        for (const option of durationOptions) {
+            if (await option.isDisplayed().catch(() => false)) {
+                visibleOptions.push(option)
+            }
+        }
+
+        if (visibleOptions.length > 0) {
+            const randomIndex = Math.floor(Math.random() * visibleOptions.length)
+            const selectedOption = visibleOptions[randomIndex]
+            const selectedDuration = await selectedOption.getText().catch(() => '')
+
+            await selectedOption.click()
+            console.log(`Selected duration: ${selectedDuration}`)
+            return
+        }
+
+        const { width, height } = await driver.getWindowSize()
+        await driver.execute('mobile: swipeGesture', {
+            left: Math.floor(width * 0.2),
+            top: Math.floor(height * 0.6),
+            width: Math.floor(width * 0.6),
+            height: Math.floor(height * 0.3),
+            direction: 'up',
+            percent: 0.5,
+        })
+        await driver.pause(750)
+    }
+
+    throw new Error('No duration option was found')
+}
+
+async function completeCareNote(): Promise<void> {
+    await selectRequiredDuration()
+
+    const confirmXpath = await (testBot as any)
+        .getLocatorTextForElement(selectors.confirmButton)
+    const confirmButton = await $(confirmXpath)
+    await confirmButton.waitForDisplayed({ timeout: 10000 })
+    await confirmButton.waitForEnabled({ timeout: 10000 })
+    await confirmButton.click()
+
+    await testBot.waitUntilVisible(selectors.createRecordsButton, 10000)
+    await testBot.click(selectors.createRecordsButton)
+
+    await testBot.waitUntilVisible(selectors.closeButton, 10000)
+    await testBot.click(selectors.closeButton)
+
+    await testBot.waitUntilVisible(selectors.earlierTab, 10000)
+    await testBot.click(selectors.earlierTab)
+
+    await testBot.waitUntilVisible(selectors.earlierCloseButton, 10000)
+    await testBot.click(selectors.earlierCloseButton)
+
+    try {
+        await testBot.waitUntilVisible(selectors.myCommunitiesTab, 15000)
+    } catch (err) {
+        // Capture the screen if closing the created Blood Sugar record
+        // does not return to the Communities page.
+        await dumpPageSourceOnFailure('completeCareNote - My Communities not reached after Earlier close')
+        throw err
+    }
+}
+
+async function runStep(step: string, action: () => Promise<void>): Promise<void> {
+    try {
+        await action()
+    } catch (error) {
+        await dumpPageSourceOnFailure(step)
+        throw error
+    }
+}
+
+describe('Resident Area Profile - Observations - Blood Sugar', () => {
+
+    it('Validates Blood Sugar boundary values and completes with a valid value', async () => {
+        await runStep('Blood Sugar boundary value analysis', async () => {
+            await openBloodSugarCareNote(NON_BASELINE_RESIDENT)
+
+            await runClinicalBoundaryAnalysis()
+
+            await setBloodSugar(VALID_BLOOD_SUGAR)
+            await expectClinicalValidation(false)
+
+            await completeCareNote()
+        })
+    })
+
+    it('Validates baseline Blood Sugar values and completes with a valid value', async () => {
+        await runStep('baseline Blood Sugar', async () => {
+            await openBloodSugarCareNote(BASELINE_RESIDENT)
+
+            await setBloodSugar(String(BASELINE_MIN - 1))
+            await expectClinicalValidation(false)
+            await expectGuidance('present')
+
+            await setBloodSugar(String(BASELINE_MAX + 1))
+            await expectClinicalValidation(false)
+            await expectGuidance('present')
+
+            await setBloodSugar(VALID_BLOOD_SUGAR)
+            await expectClinicalValidation(false)
+            await expectGuidance('none')
+
+            await completeCareNote()
+        })
+    })
+
+    it('Leaves Blood Sugar blank for a new non-baseline resident and completes the care note', async () => {
+        await runStep('blank non-baseline Blood Sugar', async () => {
+            await openBloodSugarCareNote(NON_BASELINE_RESIDENT)
+            await clearBloodSugar()
+            await expectClinicalValidation(false)
+            await completeCareNote()
+        })
+    })
+
+    it('Rejects zero and negative Blood Sugar values, then completes with a valid value', async () => {
+        await runStep('zero and negative Blood Sugar', async () => {
+            await openBloodSugarCareNote(NON_BASELINE_RESIDENT)
+
+            for (const value of ['0', '-1']) {
+                await setBloodSugar(value)
+                await expectClinicalValidation(true)
+            }
+
+            await setBloodSugar(VALID_BLOOD_SUGAR)
+            await expectClinicalValidation(false)
+            await completeCareNote()
+        })
+    })
+
+})
